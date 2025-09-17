@@ -5,6 +5,20 @@ Optionally, it can also replace the mouse pointer with a red arrow for better co
 
 ---
 
+## Examples
+
+### Animated Demo
+![Demo of caret and pointer in light & dark modes](Docs-cursor-vis-example-light-and-dark-modes.gif)
+
+### Static Screenshots
+Light Mode:  
+![Light Mode Example](Screenshot-Light-Mode.png)
+
+Dark Mode:  
+![Dark Mode Example](Screenshot-Dark-Mode.png)
+
+---
+
 ## Install Methods
 
 There are two ways to install this script. Most users should use **Option 1 (Recommended)**.  
