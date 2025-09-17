@@ -8,7 +8,7 @@ Optionally, it can also replace the mouse pointer with a red arrow for better co
 ### Animated Demo
 <img src="Docs-cursor-vis-example-light-and-dark-modes.gif" alt="Demo of caret and pointer in light & dark modes" width="500">
 
---
+---
 
 ## Install Methods
 
