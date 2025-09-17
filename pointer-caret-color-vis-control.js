@@ -486,6 +486,48 @@
 
     panel.appendChild(btnRow);
 
+    // Hotkeys tooltip section
+    var tooltipSection = doc.createElement('div');
+    tooltipSection.style.cssText = 'margin-top:16px; padding:12px; background:#f8f9fa; border:1px solid #dee2e6; border-radius:6px; font-size:12px;';
+    
+    var tooltipTitle = doc.createElement('div');
+    tooltipTitle.textContent = 'Hotkeys (Ctrl+Alt+):';
+    tooltipTitle.style.cssText = 'font-weight:bold; margin-bottom:8px; color:#495057;';
+    tooltipSection.appendChild(tooltipTitle);
+    
+    var hotkeyList = doc.createElement('div');
+    hotkeyList.style.cssText = 'display:grid; grid-template-columns:1fr 1fr; gap:4px 12px; font-family:monospace;';
+    
+    var hotkeys = [
+      ['O', 'Toggle this panel'],
+      ['C', 'Toggle caret overlay'],
+      ['P', 'Toggle red pointer'],
+      ['D', 'Toggle debug mode'],
+      ['+', 'Increase pointer size'],
+      ['-', 'Decrease pointer size'],
+      ['9', 'Reset to defaults']
+    ];
+    
+    hotkeys.forEach(function(hotkey) {
+      var hotkeyItem = doc.createElement('div');
+      hotkeyItem.style.cssText = 'display:flex; justify-content:space-between; align-items:center;';
+      
+      var keySpan = doc.createElement('span');
+      keySpan.textContent = hotkey[0];
+      keySpan.style.cssText = 'background:#e9ecef; padding:2px 6px; border-radius:3px; font-weight:bold; min-width:20px; text-align:center;';
+      
+      var descSpan = doc.createElement('span');
+      descSpan.textContent = hotkey[1];
+      descSpan.style.cssText = 'color:#6c757d;';
+      
+      hotkeyItem.appendChild(keySpan);
+      hotkeyItem.appendChild(descSpan);
+      hotkeyList.appendChild(hotkeyItem);
+    });
+    
+    tooltipSection.appendChild(hotkeyList);
+    panel.appendChild(tooltipSection);
+
     // Handlers
     caretColorInput.addEventListener('input', function() {
       CARET_COLOR = caretColorInput.value;
@@ -663,11 +705,47 @@
         return;
       }
 
-      // Quick preset tiny pointer
+      // Reset all settings to defaults
       if(e.code==='Digit9'){
-        RED_POINTER_PIXEL_SIZE = POINTER_TINY_PRESET;
-        console.log('[DocsCaret] Pointer size preset ->', RED_POINTER_PIXEL_SIZE);
+        // Reset to default values
+        CARET_COLOR = '#ff0000';
+        POINTER_COLOR = '#ff0000';
+        RED_POINTER_PIXEL_SIZE = 12;
+        RED_POINTER_ENABLED = true;
+        
+        // Update all documents
+        updateCaretColorAllDocs();
         applyRedPointerAllDocs();
+        
+        // Update control panel if visible
+        if (CONTROL_PANEL_VISIBLE) {
+          var panel = CONTROL_PANEL_ELEMENT;
+          if (panel) {
+            var caretInput = panel.querySelector('#__dccpCaretColor');
+            var caretPrev = panel.querySelector('#__dccpCaretPreview');
+            var pointerInput = panel.querySelector('#__dccpPointerColor');
+            var pointerPrev = panel.querySelector('#__dccpPointerPreview');
+            var sizeSlider = panel.querySelector('#__dccpPointerSize');
+            var sizeDisplay = panel.querySelector('#__dccpSizeDisplay');
+            
+            if (caretInput) caretInput.value = CARET_COLOR;
+            if (caretPrev) {
+              caretPrev.textContent = CARET_COLOR;
+              caretPrev.style.background = CARET_COLOR;
+              caretPrev.style.color = getContrastColor(CARET_COLOR);
+            }
+            if (pointerInput) pointerInput.value = POINTER_COLOR;
+            if (pointerPrev) {
+              pointerPrev.textContent = POINTER_COLOR;
+              pointerPrev.style.background = POINTER_COLOR;
+              pointerPrev.style.color = getContrastColor(POINTER_COLOR);
+            }
+            if (sizeSlider) sizeSlider.value = RED_POINTER_PIXEL_SIZE;
+            if (sizeDisplay) sizeDisplay.textContent = RED_POINTER_PIXEL_SIZE + 'px';
+          }
+        }
+        
+        console.log('[DocsCaret] Reset to defaults -> caret:#ff0000, pointer:#ff0000, size:12px');
         e.preventDefault();
         return;
       }
