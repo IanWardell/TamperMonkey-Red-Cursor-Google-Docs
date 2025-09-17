@@ -35,7 +35,7 @@ Use `Ctrl+Alt+` + key combinations:
 
 ## Files
 - `docs-caret.user.js` — minimal userscript stub with metadata and `@require` to load the implementation
-- `caret.js` — full userscript implementation
+- `pointer-caret-color-vis-control.js` — full userscript implementation
 - `README.md`, `LICENSE`
 
 ## License
