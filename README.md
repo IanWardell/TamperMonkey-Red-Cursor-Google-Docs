@@ -11,11 +11,9 @@ Optionally, it can also replace the mouse pointer with a red arrow for better co
 ![Demo of caret and pointer in light & dark modes](Docs-cursor-vis-example-light-and-dark-modes.gif)
 
 ### Static Screenshots
-Light Mode:  
-![Light Mode Example](Screenshot-Light-Mode.png)
-
-Dark Mode:  
-![Dark Mode Example](Screenshot-Dark-Mode.png)
+| Light Mode | Dark Mode |
+|------------|-----------|
+| ![Light Mode Example](Screenshot-Light-Mode.png) | ![Dark Mode Example](Screenshot-Dark-Mode.png) |
 
 ---
 
