@@ -31,10 +31,10 @@
   var RED_POINTER_PIXEL_SIZE = 14;           // nominal cursor SVG size (smaller default)
 
   // Pointer size limits for hotkeys
-  var POINTER_MIN = 10;
+  var POINTER_MIN = 8;
   var POINTER_MAX = 48;
   var POINTER_STEP = 2;
-  var POINTER_TINY_PRESET = 12;
+  var POINTER_TINY_PRESET = 10;
 
   // =========================
   // ===== UTIL / LOGS =======
