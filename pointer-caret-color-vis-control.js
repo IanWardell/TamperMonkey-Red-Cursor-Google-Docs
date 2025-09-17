@@ -1,46 +1,29 @@
-// ==UserScript==
-// @name         Google Docs: High-Contrast Caret & Pointer (GM storage + cross-tab sync)
-// @namespace    https://github.com/IanWardell
-// @version      1.3.0
-// @description  High-contrast caret overlay + customizable pointer; settings persisted via Tampermonkey GM_* and synced live across tabs/frames.
-// @author       you
-// @match        https://docs.google.com/*
-// @grant        GM_getValue
-// @grant        GM_setValue
-// @grant        GM_addValueChangeListener
-// @grant        GM_addStyle
-// @run-at       document-idle
-// ==/UserScript==
-/* eslint-disable no-var, prefer-const, no-use-before-define, no-undef */
+/* eslint-disable no-var, prefer-const, no-use-before-define */
+/*
+  pointer-caret-color-vis-control.js
+  Google Docs High-Contrast Caret + Custom Pointer (overlay)
+
+  Core library (no Tampermonkey header, no GM_*). Persistence is provided by an
+  optional storage adapter injected at window.__DocsCaretStorage by the host
+  (e.g., a Tampermonkey stub). If no adapter is present at load, we start on
+  localStorage, then lazily adopt the adapter when it appears (with migration).
+
+  Exposes window.DocsCaret API:
+    - openPanel()
+    - closePanel()
+    - togglePointer()
+    - toggleCaret()
+    - resetDefaults()
+    - toggleDebug()
+    - useStorageAdapter(adapter)   <-- stub calls this when ready
+    - version
+*/
 
 (function () {
   'use strict';
 
   // =========================
-  // ======= CONFIG ========== 
-  // =========================
-  var CARET_COLOR         = '#ff0000'; // caret overlay color (persisted)
-  var CARET_WIDTH         = 1;         // caret overlay width, px
-  var CARET_BLINKMS       = 500;       // caret overlay blink period
-  var HOLD_LAST_MS        = 650;       // keep last caret for brief selection flicker (ms)
-  var DEBUG               = false;     // global debug logs (Ctrl+Alt+D when HOTKEYS=true)
-
-  // Master hotkey switch. If false, NO hotkeys are registered.
-  var HOTKEYS             = true;
-
-  // Pointer (arrow) options
-  var RED_POINTER_ENABLED = true;             // default ON (not persisted; session toggle)
-  var RED_POINTER_FORCE_EVERYWHERE = false;   // false = keep I-beam in text, true = override everywhere
-  var RED_POINTER_PIXEL_SIZE = 12;            // pointer size (persisted)
-  var POINTER_COLOR       = '#ff0000';        // pointer color (persisted)
-
-  // Pointer size limits for hotkeys (when enabled)
-  var POINTER_MIN         = 10;
-  var POINTER_MAX         = 48;
-  var POINTER_STEP        = 2;
-
-  // =========================
-  // ===== PERSISTENCE =======
+  // ===== PERSIST KEYS ======
   // =========================
   var LS_KEYS = {
     caretColor:   'docsCaret.caretColor',
@@ -48,78 +31,12 @@
     pointerSize:  'docsCaret.pointerSize'
   };
 
+  // =========================
+  // ====== UTILITIES ========
+  // =========================
   function clamp(n, lo, hi){ return Math.min(hi, Math.max(lo, n)); }
-
-  // ---- GM-storage wrappers (shared across all tabs/frames) ----
-  function gmGet(key, fallback) {
-    try { return GM_getValue(key, fallback); } catch (_) { return fallback; }
-  }
-  function gmSet(key, value) {
-    try { GM_setValue(key, value); } catch (_) { /* ignore */ }
-  }
-
-  function loadPrefs(){
-    var cc = gmGet(LS_KEYS.caretColor, CARET_COLOR);
-    if (cc && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(cc)) CARET_COLOR = cc;
-
-    var pc = gmGet(LS_KEYS.pointerColor, POINTER_COLOR);
-    if (pc && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(pc)) POINTER_COLOR = pc;
-
-    var ps = gmGet(LS_KEYS.pointerSize, String(RED_POINTER_PIXEL_SIZE));
-    if (ps && !isNaN(+ps)) RED_POINTER_PIXEL_SIZE = clamp(parseInt(ps,10), POINTER_MIN, POINTER_MAX);
-  }
-
-  function savePrefs(){
-    gmSet(LS_KEYS.caretColor,   CARET_COLOR);
-    gmSet(LS_KEYS.pointerColor, POINTER_COLOR);
-    gmSet(LS_KEYS.pointerSize,  String(RED_POINTER_PIXEL_SIZE));
-  }
-
-  // Cross-tab live sync: react to changes saved in other tabs
-  function installValueChangeListeners(){
-    try {
-      GM_addValueChangeListener(LS_KEYS.caretColor, function(name, oldVal, newVal, remote){
-        if (!remote) return; // only from other tab/frame
-        if (newVal && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(newVal)) {
-          CARET_COLOR = newVal;
-          updateCaretColorAllDocs();
-          syncPanelUI();
-          if (DEBUG) console.log('[DocsCaret] caretColor synced from other tab ->', newVal);
-        }
-      });
-      GM_addValueChangeListener(LS_KEYS.pointerColor, function(name, oldVal, newVal, remote){
-        if (!remote) return;
-        if (newVal && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(newVal)) {
-          POINTER_COLOR = newVal;
-          applyRedPointerAllDocs();
-          syncPanelUI();
-          if (DEBUG) console.log('[DocsCaret] pointerColor synced from other tab ->', newVal);
-        }
-      });
-      GM_addValueChangeListener(LS_KEYS.pointerSize, function(name, oldVal, newVal, remote){
-        if (!remote) return;
-        var n = clamp(parseInt(newVal,10), POINTER_MIN, POINTER_MAX);
-        if (!isNaN(n)) {
-          RED_POINTER_PIXEL_SIZE = n;
-          applyRedPointerAllDocs();
-          syncPanelUI();
-          if (DEBUG) console.log('[DocsCaret] pointerSize synced from other tab ->', n);
-        }
-      });
-    } catch (e) {
-      if (DEBUG) console.warn('[DocsCaret] GM_addValueChangeListener unavailable', e);
-    }
-  }
-
-  // Load persisted settings immediately
-  loadPrefs();
-
-  // =========================
-  // ===== UTIL / LOGS =======
-  // =========================
   function log(){ if(DEBUG) console.log.apply(console, ['[DocsCaret]'].concat([].slice.call(arguments))); }
   function warn(){ if(DEBUG) console.warn.apply(console, ['[DocsCaret]'].concat([].slice.call(arguments))); }
-
   function getContrastColor(hexColor) {
     try{
       var r = parseInt(hexColor.substr(1, 2), 16);
@@ -129,13 +46,146 @@
       return luminance > 0.5 ? '#000000' : '#ffffff';
     }catch(_){ return '#000000'; }
   }
-
-  // "Zero-ish" rect filter. A real caret should have some height and near-zero width.
   function isZeroishRect(r){
     if(!r) return true;
     var h = Math.max(0, r.height || 0);
     return (h < 8) || (r.left === 0 && r.top === 0 && h === 16);
   }
+
+  // =========================
+  // ====== SETTINGS =========
+  // =========================
+  var CARET_COLOR         = '#ff0000'; // persisted
+  var CARET_WIDTH         = 1;         // px
+  var CARET_BLINKMS       = 500;       // ms
+  var HOLD_LAST_MS        = 650;       // ms
+  var DEBUG               = false;
+
+  var HOTKEYS             = true;
+
+  // Pointer (arrow)
+  var RED_POINTER_ENABLED = true;             // session toggle (not persisted)
+  var RED_POINTER_FORCE_EVERYWHERE = false;   // false = keep I-beam in text
+  var RED_POINTER_PIXEL_SIZE = 12;            // persisted
+  var POINTER_COLOR       = '#ff0000';        // persisted
+
+  var POINTER_MIN         = 10;
+  var POINTER_MAX         = 48;
+  var POINTER_STEP        = 2;
+
+  // =========================
+  // === STORAGE WRAPPER  ====
+  // =========================
+  // Start with a localStorage backend. If the stub later provides a GM adapter,
+  // we adopt it and migrate values once.
+  var _backend = {
+    get: function (key, defVal) {
+      try {
+        var v = localStorage.getItem(key);
+        return (v === null || v === undefined) ? defVal : v;
+      } catch(_) { return defVal; }
+    },
+    set: function (key, value) {
+      try { localStorage.setItem(key, value); } catch(_) {}
+    },
+    onChange: function (key, cb) {
+      // Cross-tab LS updates (same origin)
+      try {
+        window.addEventListener('storage', function(e){
+          if (e && e.key === key) cb(e.newValue, e.oldValue);
+        });
+      } catch(_) {}
+    },
+    name: 'localStorage'
+  };
+
+  var _adopted = false;
+  function _migrateIfNeeded(newBackend){
+    try{
+      // Write current in-memory values into new backend (authoritative state)
+      newBackend.set(LS_KEYS.caretColor,   CARET_COLOR);
+      newBackend.set(LS_KEYS.pointerColor, POINTER_COLOR);
+      newBackend.set(LS_KEYS.pointerSize,  String(RED_POINTER_PIXEL_SIZE));
+    }catch(_){}
+  }
+  function _subscribeAdapterChanges(backend){
+    try{
+      backend.onChange(LS_KEYS.caretColor, function(newVal){
+        if (newVal && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(newVal)) {
+          CARET_COLOR = newVal; updateCaretColorAllDocs(); syncPanelUI(); log('synced caretColor ->', newVal);
+        }
+      });
+      backend.onChange(LS_KEYS.pointerColor, function(newVal){
+        if (newVal && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(newVal)) {
+          POINTER_COLOR = newVal; applyRedPointerAllDocs(); syncPanelUI(); log('synced pointerColor ->', newVal);
+        }
+      });
+      backend.onChange(LS_KEYS.pointerSize, function(newVal){
+        var n = clamp(parseInt(newVal,10), POINTER_MIN, POINTER_MAX);
+        if (!isNaN(n)) { RED_POINTER_PIXEL_SIZE = n; applyRedPointerAllDocs(); syncPanelUI(); log('synced pointerSize ->', n); }
+      });
+    }catch(_){}
+  }
+
+  function useStorageAdapter(adapter){
+    if (!adapter || typeof adapter.get !== 'function' || typeof adapter.set !== 'function') return false;
+    if (_adopted) return true;
+    _migrateIfNeeded(adapter);
+    _backend = {
+      get: adapter.get,
+      set: adapter.set,
+      onChange: (typeof adapter.onChange === 'function' ? adapter.onChange : function(){}),
+      name: 'GM'
+    };
+    _adopted = true;
+    _subscribeAdapterChanges(_backend);
+    log('adopted storage adapter: GM_*');
+    return true;
+  }
+
+  // Expose a hook so the stub can push its adapter explicitly
+  window.DocsCaret = window.DocsCaret || {};
+  window.DocsCaret.useStorageAdapter = useStorageAdapter;
+
+  // If the stub races and sets the adapter early, adopt it now as well
+  if (typeof window.__DocsCaretStorage === 'object') {
+    try { useStorageAdapter(window.__DocsCaretStorage); } catch(_){}
+  } else {
+    // Poll briefly for late adapter (covers most race windows without overhead)
+    (function pollForAdapter(tries){
+      if (_adopted) return;
+      if (typeof window.__DocsCaretStorage === 'object') { useStorageAdapter(window.__DocsCaretStorage); return; }
+      if (tries > 120) return; // ~6s
+      setTimeout(function(){ pollForAdapter(tries+1); }, 50);
+    })(0);
+  }
+
+  // Convenience wrappers that always go through the current backend
+  function prefGet(key, defVal){ return _backend.get(key, defVal); }
+  function prefSet(key, value){  _backend.set(key, value); }
+
+  // =========================
+  // ===== PREFS LOAD/SAVE ===
+  // =========================
+  function loadPrefs(){
+    var cc = prefGet(LS_KEYS.caretColor, CARET_COLOR);
+    if (cc && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(cc)) CARET_COLOR = cc;
+
+    var pc = prefGet(LS_KEYS.pointerColor, POINTER_COLOR);
+    if (pc && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(pc)) POINTER_COLOR = pc;
+
+    var ps = prefGet(LS_KEYS.pointerSize, String(RED_POINTER_PIXEL_SIZE));
+    if (ps && !isNaN(+ps)) RED_POINTER_PIXEL_SIZE = clamp(parseInt(ps,10), POINTER_MIN, POINTER_MAX);
+  }
+
+  function savePrefs(){
+    prefSet(LS_KEYS.caretColor,   CARET_COLOR);
+    prefSet(LS_KEYS.pointerColor, POINTER_COLOR);
+    prefSet(LS_KEYS.pointerSize,  String(RED_POINTER_PIXEL_SIZE));
+  }
+
+  // Load immediately (will be LS; later adopted GM gets migration)
+  loadPrefs();
 
   // =========================
   // ======= DEBUG UI ========
@@ -344,20 +394,17 @@
         : setTimeout(cb, 16);
     }
 
-    // Key/selection/input listeners: capture=true, passive not applicable
     ['selectionchange','keyup','keydown','input','mouseup','mousedown']
       .forEach(function(ev){
         doc.addEventListener(ev, function(){ if(DEBUG) log('Event',ev,'-> update'); schedule(ev); }, true);
       });
 
-    // Touch + scroll: passive to avoid scroll-blocking warnings
     var optPassive = { capture: true, passive: true };
     doc.addEventListener('touchstart', function(){ schedule('touchstart'); }, optPassive);
     doc.addEventListener('touchend',   function(){ schedule('touchend');   }, optPassive);
     (doc.defaultView||window).addEventListener('scroll',  function(){ schedule('scroll');  }, optPassive);
     (doc.defaultView||window).addEventListener('resize',  function(){ schedule('resize');  }, { capture:true, passive:true });
 
-    // Boot polling to catch editor swaps
     var tries=0, max=60;
     var boot=setInterval(function(){ updateCaretPositionGlobal('boot#'+tries); tries++; if(tries>=max) clearInterval(boot); }, 250);
   }
@@ -387,14 +434,14 @@
       var url = buildRedCursorDataURL(RED_POINTER_PIXEL_SIZE);
 
       var ruleEverywhere = [
-        '* { cursor: url("'+url+'") 2 2, auto !important; }'
+        '* { cursor: url(\"'+url+'\") 2 2, auto !important; }'
       ].join('\n');
 
       var ruleNonText = [
-        'html, body, .kix-appview-editor, .kix-appview-editor *:not([contenteditable="true"]) {',
-        '  cursor: url("'+url+'") 2 2, auto !important;',
+        'html, body, .kix-appview-editor, .kix-appview-editor *:not([contenteditable=\"true\"]) {',
+        '  cursor: url(\"'+url+'\") 2 2, auto !important;',
         '}',
-        '[contenteditable="true"], textarea, input[type="text"], input:not([type]) {',
+        '[contenteditable=\"true\"], textarea, input[type=\"text\"], input:not([type]) {',
         '  cursor: auto !important;',
         '}'
       ].join('\n');
@@ -441,7 +488,7 @@
     title.style.cssText = 'font-weight:bold; margin-bottom:12px; text-align:center; color:#333;';
     panel.appendChild(title);
 
-    // Caret color group
+    // Caret color
     var caretGroup = doc.createElement('div');
     caretGroup.style.cssText = 'margin-bottom:14px;';
     var caretLabel = doc.createElement('label');
@@ -462,13 +509,12 @@
     caretPreview.textContent = CARET_COLOR;
     caretPreview.style.cssText = 'margin-top:6px; padding:6px; background:#f5f5f5; border-radius:4px; font-family:monospace; text-align:center;';
     caretGroup.appendChild(caretPreview);
-
     caretPreview.style.background = CARET_COLOR;
     caretPreview.style.color = getContrastColor(CARET_COLOR);
 
     panel.appendChild(caretGroup);
 
-    // Pointer color group
+    // Pointer color
     var pointerColorGroup = doc.createElement('div');
     pointerColorGroup.style.cssText = 'margin-bottom:14px;';
     var pointerColorLabel = doc.createElement('label');
@@ -492,7 +538,7 @@
 
     panel.appendChild(pointerColorGroup);
 
-    // Pointer size group
+    // Pointer size
     var pointerGroup = doc.createElement('div');
     pointerGroup.style.cssText = 'margin-bottom:8px;';
     var pointerLabel = doc.createElement('label');
@@ -519,7 +565,7 @@
 
     panel.appendChild(pointerGroup);
 
-    // Buttons row
+    // Buttons
     var btnRow = doc.createElement('div');
     btnRow.style.cssText = 'display:flex; gap:8px; margin-top:12px;';
 
@@ -543,20 +589,19 @@
 
     panel.appendChild(btnRow);
 
-    // Hotkeys help (omitted for brevity — same as previous build)
     var help = doc.createElement('div');
     help.style.cssText='margin-top:12px; font:12px/1.4 system-ui,Arial,sans-serif; color:#444;';
     help.textContent='Hotkeys: Ctrl+Alt+O (panel), C (caret), P (pointer), D (debug), -/+(size), 9 (reset defaults).';
     panel.appendChild(help);
 
-    // Handlers — save on input so other tabs sync immediately
+    // Handlers — save on input so other tabs can sync immediately
     caretColorInput.addEventListener('input', function() {
       CARET_COLOR = caretColorInput.value;
       caretPreview.textContent = CARET_COLOR;
       caretPreview.style.background = CARET_COLOR;
       caretPreview.style.color = getContrastColor(CARET_COLOR);
       updateCaretColorAllDocs();
-      savePrefs(); // immediate persist + cross-tab notify
+      savePrefs();
     });
 
     pointerColorInput.addEventListener('input', function() {
@@ -565,14 +610,14 @@
       pointerColorPreview.style.background = POINTER_COLOR;
       pointerColorPreview.style.color = getContrastColor(POINTER_COLOR);
       applyRedPointerAllDocs();
-      savePrefs(); // immediate persist + cross-tab notify
+      savePrefs();
     });
 
     sizeSlider.addEventListener('input', function() {
       RED_POINTER_PIXEL_SIZE = clamp(parseInt(sizeSlider.value,10), POINTER_MIN, POINTER_MAX);
       sizeDisplay.textContent = RED_POINTER_PIXEL_SIZE + 'px';
       applyRedPointerAllDocs();
-      savePrefs(); // immediate persist + cross-tab notify
+      savePrefs();
     });
 
     function flashGreen(){
@@ -582,24 +627,12 @@
       setTimeout(function(){ panel.style.background = old; }, 350);
     }
 
-    saveBtn.addEventListener('click', function() {
-      savePrefs();
-      flashGreen();
-      log('Preferences saved');
-    });
-
-    exitBtn.addEventListener('click', function() {
-      savePrefs();
-      hideControlPanel();
-    });
-
+    saveBtn.addEventListener('click', function() { savePrefs(); flashGreen(); log('Preferences saved'); });
+    exitBtn.addEventListener('click', function() { savePrefs(); hideControlPanel(); });
     closeBtn.addEventListener('click', hideControlPanel);
 
     doc.addEventListener('keydown', function(e) {
-      if (e.key === 'Escape' && CONTROL_PANEL_VISIBLE) {
-        hideControlPanel();
-        e.preventDefault();
-      }
+      if (e.key === 'Escape' && CONTROL_PANEL_VISIBLE) { hideControlPanel(); e.preventDefault(); }
     });
 
     (doc.body || doc.documentElement).appendChild(panel);
@@ -625,20 +658,8 @@
     if (sizeVal) sizeVal.textContent = RED_POINTER_PIXEL_SIZE + 'px';
   }
 
-  function showControlPanel() {
-    var panel = createControlPanel(window.top.document);
-    if (!panel) return;
-
-    // sync current values into controls
-    CONTROL_PANEL_VISIBLE = true;
-    syncPanelUI();
-    panel.style.display = 'block';
-  }
-
-  function hideControlPanel() {
-    if (CONTROL_PANEL_ELEMENT) CONTROL_PANEL_ELEMENT.style.display = 'none';
-    CONTROL_PANEL_VISIBLE = false;
-  }
+  function showControlPanel() { var p = createControlPanel(window.top.document); if (!p) return; CONTROL_PANEL_VISIBLE = true; syncPanelUI(); p.style.display = 'block'; }
+  function hideControlPanel() { if (CONTROL_PANEL_ELEMENT) CONTROL_PANEL_ELEMENT.style.display = 'none'; CONTROL_PANEL_VISIBLE = false; }
 
   function updateCaretColorAllDocs() {
     var docs = getAllDocs(document);
@@ -646,7 +667,6 @@
       var d = docs[i];
       var caret = d.__overlayCaret;
       if (caret) caret.style.background = CARET_COLOR;
-
       try {
         var existingStyle = d.getElementById('__docsCaretColorStyle');
         if (existingStyle) existingStyle.remove();
@@ -669,87 +689,60 @@
     doc.addEventListener('keydown', function(e){
       if(!(e.ctrlKey && e.altKey)) return;
 
-      if(e.code==='KeyC'){
-        var docs=getAllDocs(document);
-        var state;
-        for(var i=0;i<docs.length;i++){
-          var d=docs[i]; ensureCaretForDoc(d);
-          d.__overlayCaretEnabled=!d.__overlayCaretEnabled;
-          if(!d.__overlayCaretEnabled && d.__overlayCaret){ d.__overlayCaret.style.visibility='hidden'; d.__overlayCaretVisible=false; }
-          state=d.__overlayCaretEnabled; ensureDebugBadge(d);
-        }
-        log('Toggle caret enabled ->', state); e.preventDefault(); return;
-      }
-
-      if(e.code==='KeyD'){
-        DEBUG=!DEBUG;
-        var d2=getAllDocs(document);
-        for(var j=0;j<d2.length;j++) ensureDebugBadge(d2[j]);
-        console.log('[DocsCaret] DEBUG ->', DEBUG); e.preventDefault(); return;
-      }
-
-      if(e.code==='KeyP'){
-        RED_POINTER_ENABLED = !RED_POINTER_ENABLED;
-        console.log('[DocsCaret] Red Pointer ->', RED_POINTER_ENABLED);
-        applyRedPointerAllDocs();
-        e.preventDefault(); return;
-      }
+      if(e.code==='KeyC'){ toggleCaret(); e.preventDefault(); return; }
+      if(e.code==='KeyD'){ toggleDebug(); e.preventDefault(); return; }
+      if(e.code==='KeyP'){ togglePointer(); e.preventDefault(); return; }
 
       if(e.code==='Minus' || e.code==='NumpadSubtract'){
         RED_POINTER_PIXEL_SIZE = Math.max(POINTER_MIN, RED_POINTER_PIXEL_SIZE - POINTER_STEP);
-        console.log('[DocsCaret] Pointer size ->', RED_POINTER_PIXEL_SIZE);
-        applyRedPointerAllDocs();
-        savePrefs(); // persist & notify other tabs
-        e.preventDefault(); return;
+        applyRedPointerAllDocs(); savePrefs(); e.preventDefault(); return;
       }
-
       if(e.code==='Equal' || e.code==='NumpadAdd'){
         RED_POINTER_PIXEL_SIZE = Math.min(POINTER_MAX, RED_POINTER_PIXEL_SIZE + POINTER_STEP);
-        console.log('[DocsCaret] Pointer size ->', RED_POINTER_PIXEL_SIZE);
-        applyRedPointerAllDocs();
-        savePrefs(); // persist & notify other tabs
-        e.preventDefault(); return;
+        applyRedPointerAllDocs(); savePrefs(); e.preventDefault(); return;
       }
+      if(e.code==='Digit9'){ resetDefaults(); e.preventDefault(); return; }
 
-      if(e.code==='Digit9'){
-        CARET_COLOR = '#ff0000';
-        POINTER_COLOR = '#ff0000';
-        RED_POINTER_PIXEL_SIZE = 12;
-        RED_POINTER_ENABLED = true;
-
-        updateCaretColorAllDocs();
-        applyRedPointerAllDocs();
-        savePrefs(); // persist defaults & notify other tabs
-        syncPanelUI();
-
-        console.log('[DocsCaret] Reset to defaults -> caret:#ff0000, pointer:#ff0000, size:12px');
-        e.preventDefault(); return;
-      }
-
-      if(e.code==='KeyO'){
-        if (CONTROL_PANEL_VISIBLE) hideControlPanel();
-        else showControlPanel();
-        console.log('[DocsCaret] Control panel ->', CONTROL_PANEL_VISIBLE);
-        e.preventDefault(); return;
-      }
+      if(e.code==='KeyO'){ if (CONTROL_PANEL_VISIBLE) hideControlPanel(); else showControlPanel(); e.preventDefault(); return; }
     }, true);
   }
 
   function installHotkeysAllDocs(){
     var docs = getAllDocs(document);
+    for(var i=0;i<docs.length;i++){ try{ installHotkeysOnDoc(docs[i]); }catch(_){ } }
+  }
+
+  // =========================
+  // ========= API ===========
+  // =========================
+  function togglePointer(){ RED_POINTER_ENABLED=!RED_POINTER_ENABLED; applyRedPointerAllDocs(); console.log('[DocsCaret] Red Pointer ->', RED_POINTER_ENABLED); }
+  function toggleDebug(){ DEBUG=!DEBUG; var d2=getAllDocs(document); for(var j=0;j<d2.length;j++) ensureDebugBadge(d2[j]); console.log('[DocsCaret] DEBUG ->', DEBUG); }
+  function toggleCaret(){
+    var docs=getAllDocs(document), state;
     for(var i=0;i<docs.length;i++){
-      try{ installHotkeysOnDoc(docs[i]); }catch(_){}
+      var d=docs[i]; ensureCaretForDoc(d);
+      d.__overlayCaretEnabled=!d.__overlayCaretEnabled;
+      if(!d.__overlayCaretEnabled && d.__overlayCaret){ d.__overlayCaret.style.visibility='hidden'; d.__overlayCaretVisible=false; }
+      state=d.__overlayCaretEnabled; ensureDebugBadge(d);
     }
+    console.log('[DocsCaret] Caret overlay ->', state);
+  }
+  function resetDefaults(){
+    CARET_COLOR = '#ff0000';
+    POINTER_COLOR = '#ff0000';
+    RED_POINTER_PIXEL_SIZE = 12;
+    RED_POINTER_ENABLED = true;
+
+    updateCaretColorAllDocs();
+    applyRedPointerAllDocs();
+    savePrefs();
+    syncPanelUI();
+    console.log('[DocsCaret] Reset to defaults -> caret:#ff0000, pointer:#ff0000, size:12px');
   }
 
   // =========================
   // ========= INIT ==========
   // =========================
-  function applyRedPointerBoot() {
-    applyRedPointerAllDocs();
-    setInterval(applyRedPointerAllDocs, 5000); // slow backstop; MutationObserver handles most
-  }
-
   function initAll(){
     var docs=getAllDocs(document);
     for(var i=0;i<docs.length;i++){
@@ -757,10 +750,8 @@
       applyRedPointerToDoc(docs[i]);
       attachDocListeners(docs[i]);
     }
-
-    try { createControlPanel(window.top.document); } catch(_) {}
-
-    installValueChangeListeners();  // <— enable cross-tab sync
+    try { createControlPanel(window.top.document); } catch(_){}
+    _subscribeAdapterChanges(_backend);   // subscribe for whichever backend is active now
     installHotkeysAllDocs();
 
     var mo=new MutationObserver(function(muts){
@@ -796,8 +787,19 @@
     try{ mo.observe(document.documentElement,{childList:true,subtree:true}); }catch(e){}
 
     updateCaretPositionGlobal('init');
-    applyRedPointerBoot();
+
+    // gentle backstop for pointer style (MO catches most)
+    setInterval(applyRedPointerAllDocs, 5000);
   }
 
   initAll();
+
+  // Finalize public API (add alongside useStorageAdapter)
+  window.DocsCaret.openPanel    = showControlPanel;
+  window.DocsCaret.closePanel   = hideControlPanel;
+  window.DocsCaret.togglePointer= togglePointer;
+  window.DocsCaret.toggleCaret  = toggleCaret;
+  window.DocsCaret.resetDefaults= resetDefaults;
+  window.DocsCaret.toggleDebug  = toggleDebug;
+  window.DocsCaret.version      = '1.5.0';
 })();
