@@ -252,6 +252,28 @@
     }
   }
 
+  function findActiveSelectionRect() {
+    // Search all reachable docs/iframes for a usable caret rectangle.
+    var docs = getAllDocs(document);
+    for (var i = 0; i < docs.length; i++) {
+      var d = docs[i];
+      if (!looksLikeDocsEditor(d)) continue;
+
+      // 1) Try the actual collapsed selection range
+      var rSel = collapsedSelectionRect(d);
+      if (rSel && !isZeroishRect(rSel)) {
+        return { doc: d, rect: rSel, src: 'selection' };
+      }
+
+      // 2) Fall back to DOM caret elements Google renders
+      var rDom = docsDOMCaretRect(d);
+      if (rDom && !isZeroishRect(rDom)) {
+        return { doc: d, rect: rDom, src: 'dom-caret' };
+      }
+    }
+    return null; // none found
+  }
+
   function updateCaretPositionGlobal(reason){
     var found=findActiveSelectionRect();
 
@@ -285,17 +307,31 @@
   }
 
   function attachDocListeners(doc){
-    var scheduled=false;
+    if (!doc || doc.__docsCaretListenersInstalled) return;
+    doc.__docsCaretListenersInstalled = true;
+
+    var scheduled = false;
     function schedule(reason){
-      if(scheduled) return; scheduled=true;
-      setTimeout(function(){ scheduled=false; updateCaretPositionGlobal(reason); }, 16);
+      if(scheduled) return; scheduled = true;
+      // rAF schedules exactly one repaint; if unavailable, fall back to 16ms timeout
+      var cb = function(){ scheduled = false; updateCaretPositionGlobal(reason); };
+      (doc.defaultView && doc.defaultView.requestAnimationFrame)
+        ? doc.defaultView.requestAnimationFrame(cb)
+        : setTimeout(cb, 16);
     }
 
-    ['selectionchange','keyup','keydown','input','mouseup','mousedown','touchend','touchstart']
-      .forEach(function(ev){ doc.addEventListener(ev, function(){ if(DEBUG) log('Event',ev,'-> update'); schedule(ev); }, true); });
+    // Key/selection/input listeners: capture=true, passive not applicable
+    ['selectionchange','keyup','keydown','input','mouseup','mousedown']
+      .forEach(function(ev){
+        doc.addEventListener(ev, function(){ if(DEBUG) log('Event',ev,'-> update'); schedule(ev); }, true);
+      });
 
-    (doc.defaultView||window).addEventListener('scroll', function(){ schedule('scroll'); }, true);
-    (doc.defaultView||window).addEventListener('resize', function(){ schedule('resize'); }, true);
+    // Touch + scroll: passive to avoid scroll-blocking warnings
+    var optPassive = { capture: true, passive: true };
+    doc.addEventListener('touchstart', function(){ schedule('touchstart'); }, optPassive);
+    doc.addEventListener('touchend',   function(){ schedule('touchend');   }, optPassive);
+    (doc.defaultView||window).addEventListener('scroll',  function(){ schedule('scroll');  }, optPassive);
+    (doc.defaultView||window).addEventListener('resize',  function(){ schedule('resize');  }, { capture:true, passive:true });
 
     // Boot polling to catch editor swaps
     var tries=0, max=120;
@@ -818,7 +854,7 @@
     try{ mo.observe(document.documentElement,{childList:true,subtree:true}); }catch(e){}
 
     updateCaretPositionGlobal('init');
-    setInterval(applyRedPointerAllDocs, 2000);
+    setInterval(applyRedPointerAllDocs, 5000); // Reduced from 2000ms to 5000ms - MutationObserver handles new iframes
   }
 
   initAll();
