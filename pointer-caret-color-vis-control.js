@@ -529,7 +529,7 @@
 
     closeBtn.addEventListener('click', hideControlPanel);
 
-    // Close on Escape key
+    // Close on Escape key (listen on top doc only)
     doc.addEventListener('keydown', function(e) {
       if (e.key === 'Escape' && CONTROL_PANEL_VISIBLE) {
         hideControlPanel();
@@ -605,11 +605,13 @@
   // =========================
   // ======= HOTKEYS =========
   // =========================
-  function installHotkeys(){
+  function installHotkeysOnDoc(doc){
     if (!HOTKEYS) return;
+    if (!doc || doc.__docsCaretHotkeysInstalled) return;
+    doc.__docsCaretHotkeysInstalled = true;
 
-    document.addEventListener('keydown', function(e){
-      if(!(e.ctrlKey&&e.altKey)) return;
+    doc.addEventListener('keydown', function(e){
+      if(!(e.ctrlKey && e.altKey)) return;
 
       // Toggle caret overlay on/off
       if(e.code==='KeyC'){
@@ -681,6 +683,13 @@
     }, true);
   }
 
+  function installHotkeysAllDocs(){
+    var docs = getAllDocs(document);
+    for(var i=0;i<docs.length;i++){
+      try{ installHotkeysOnDoc(docs[i]); }catch(_){}
+    }
+  }
+
   // =========================
   // ========= INIT ==========
   // =========================
@@ -695,6 +704,9 @@
     // Create panel only in top document
     createControlPanel(window.top.document);
 
+    // Install hotkeys on every reachable doc/iframe
+    installHotkeysAllDocs();
+
     var mo=new MutationObserver(function(muts){
       for(var i=0;i<muts.length;i++){
         var m=muts[i];
@@ -706,6 +718,7 @@
                 ensureCaretForDoc(n.contentDocument);
                 applyRedPointerToDoc(n.contentDocument);
                 attachDocListeners(n.contentDocument);
+                installHotkeysOnDoc(n.contentDocument);
               }
             }catch(e){}
           } else if(n && n.querySelectorAll){
@@ -716,6 +729,7 @@
                   ensureCaretForDoc(nested[k].contentDocument);
                   applyRedPointerToDoc(nested[k].contentDocument);
                   attachDocListeners(nested[k].contentDocument);
+                  installHotkeysOnDoc(nested[k].contentDocument);
                 }
               }catch(e){}
             }
@@ -727,7 +741,6 @@
 
     updateCaretPositionGlobal('init');
     setInterval(applyRedPointerAllDocs, 2000);
-    installHotkeys();
   }
 
   initAll();
