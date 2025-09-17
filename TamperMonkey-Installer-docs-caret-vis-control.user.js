@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Google Docs High-Contrast Red Caret + Red Pointer (overlay, v1.9 HOTKEY toggle)
-// @namespace    https://carethelp.example
+// @name         High-Contrast Customizable Color Caret & Pointer
+// @namespace    https://github.com/IanWardell/TamperMonkey-Red-Cursor-Google-Docs
 // @version      2
-// @description  Bright red overlay caret + optional red mouse pointer in Google Docs. Skips bogus about:blank frames, ignores zero rects, and includes deep debug logging. HOTKEYS master toggle included.
+// @description  Default red overlay caret + mouse pointer with customizable color and size built for use in Google Docs. With control panel and settings persistence. Includes optional debug logging. HOTKEYS master toggle included.
 // @author       https://github.com/IanWardell/
 // @homepageURL  https://github.com/IanWardell/TamperMonkey-Red-Cursor-Google-Docs
 // @supportURL   https://github.com/IanWardell/TamperMonkey-Red-Cursor-Google-Docs/issues
