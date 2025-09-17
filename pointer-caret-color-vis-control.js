@@ -27,7 +27,7 @@
   var DEBUG         = false;        // Global debug logs (toggle with Ctrl+Alt+D when HOTKEYS=true)
 
   // Master hotkey switch. If false, NO hotkeys are registered.
-  var HOTKEYS       = false;
+  var HOTKEYS       = true;
 
   // Red pointer (arrow) options (toggle with Ctrl+Alt+P when HOTKEYS=true)
   var RED_POINTER_ENABLED = true;            // default ON
@@ -74,6 +74,190 @@
       });
       (doc.body||doc.documentElement).appendChild(b);
     }catch(e){/* ignore */}
+  }
+
+  // =========================
+  // ===== CONTROL PANEL =====
+  // =========================
+  var CONTROL_PANEL_VISIBLE = false;
+  var CONTROL_PANEL_ELEMENT = null;
+
+  function createControlPanel(doc) {
+    if (CONTROL_PANEL_ELEMENT) return CONTROL_PANEL_ELEMENT;
+
+    var panel = doc.createElement('div');
+    panel.id = '__docsCaretControlPanel';
+    panel.style.cssText = `
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      border: 2px solid #333;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      z-index: 2147483647;
+      font-family: system-ui, Arial, sans-serif;
+      font-size: 14px;
+      min-width: 300px;
+      display: none;
+    `;
+
+    // Title
+    var title = doc.createElement('div');
+    title.textContent = 'Docs Caret & Pointer Controls';
+    title.style.cssText = 'font-weight: bold; margin-bottom: 15px; text-align: center; color: #333;';
+    panel.appendChild(title);
+
+    // Caret Color Control
+    var caretGroup = doc.createElement('div');
+    caretGroup.style.cssText = 'margin-bottom: 15px;';
+    
+    var caretLabel = doc.createElement('label');
+    caretLabel.textContent = 'Caret Color:';
+    caretLabel.style.cssText = 'display: block; margin-bottom: 5px; font-weight: bold;';
+    caretGroup.appendChild(caretLabel);
+
+    var colorInput = doc.createElement('input');
+    colorInput.type = 'color';
+    colorInput.value = CARET_COLOR;
+    colorInput.style.cssText = 'width: 100%; height: 40px; border: 1px solid #ccc; border-radius: 4px; cursor: pointer;';
+    caretGroup.appendChild(colorInput);
+
+    // Color preview
+    var colorPreview = doc.createElement('div');
+    colorPreview.textContent = CARET_COLOR;
+    colorPreview.style.cssText = 'margin-top: 5px; padding: 5px; background: #f5f5f5; border-radius: 4px; font-family: monospace; text-align: center;';
+    caretGroup.appendChild(colorPreview);
+
+    panel.appendChild(caretGroup);
+
+    // Pointer Size Control
+    var pointerGroup = doc.createElement('div');
+    pointerGroup.style.cssText = 'margin-bottom: 15px;';
+    
+    var pointerLabel = doc.createElement('label');
+    pointerLabel.textContent = 'Pointer Size:';
+    pointerLabel.style.cssText = 'display: block; margin-bottom: 5px; font-weight: bold;';
+    pointerGroup.appendChild(pointerLabel);
+
+    var sizeSlider = doc.createElement('input');
+    sizeSlider.type = 'range';
+    sizeSlider.min = POINTER_MIN;
+    sizeSlider.max = POINTER_MAX;
+    sizeSlider.step = POINTER_STEP;
+    sizeSlider.value = RED_POINTER_PIXEL_SIZE;
+    sizeSlider.style.cssText = 'width: 100%; margin-bottom: 5px;';
+    pointerGroup.appendChild(sizeSlider);
+
+    // Size display
+    var sizeDisplay = doc.createElement('div');
+    sizeDisplay.textContent = RED_POINTER_PIXEL_SIZE + 'px';
+    sizeDisplay.style.cssText = 'text-align: center; font-family: monospace; color: #666;';
+    pointerGroup.appendChild(sizeDisplay);
+
+    panel.appendChild(pointerGroup);
+
+    // Close button
+    var closeBtn = doc.createElement('button');
+    closeBtn.textContent = 'Close (Esc)';
+    closeBtn.style.cssText = `
+      width: 100%;
+      padding: 8px;
+      background: #007cba;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+    `;
+    panel.appendChild(closeBtn);
+
+    // Event handlers
+    colorInput.addEventListener('input', function() {
+      CARET_COLOR = colorInput.value;
+      colorPreview.textContent = CARET_COLOR;
+      colorPreview.style.background = CARET_COLOR;
+      colorPreview.style.color = getContrastColor(CARET_COLOR);
+      updateCaretColorAllDocs();
+    });
+
+    sizeSlider.addEventListener('input', function() {
+      RED_POINTER_PIXEL_SIZE = parseInt(sizeSlider.value);
+      sizeDisplay.textContent = RED_POINTER_PIXEL_SIZE + 'px';
+      applyRedPointerAllDocs();
+    });
+
+    closeBtn.addEventListener('click', function() {
+      hideControlPanel();
+    });
+
+    // Close on Escape key
+    doc.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape' && CONTROL_PANEL_VISIBLE) {
+        hideControlPanel();
+        e.preventDefault();
+      }
+    });
+
+    (doc.body || doc.documentElement).appendChild(panel);
+    CONTROL_PANEL_ELEMENT = panel;
+    return panel;
+  }
+
+  function showControlPanel() {
+    var docs = getAllDocs(document);
+    for (var i = 0; i < docs.length; i++) {
+      var panel = createControlPanel(docs[i]);
+      panel.style.display = 'block';
+    }
+    CONTROL_PANEL_VISIBLE = true;
+  }
+
+  function hideControlPanel() {
+    if (CONTROL_PANEL_ELEMENT) {
+      CONTROL_PANEL_ELEMENT.style.display = 'none';
+    }
+    CONTROL_PANEL_VISIBLE = false;
+  }
+
+  function getContrastColor(hexColor) {
+    // Convert hex to RGB
+    var r = parseInt(hexColor.substr(1, 2), 16);
+    var g = parseInt(hexColor.substr(3, 2), 16);
+    var b = parseInt(hexColor.substr(5, 2), 16);
+    
+    // Calculate luminance
+    var luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    
+    return luminance > 0.5 ? '#000000' : '#ffffff';
+  }
+
+  function updateCaretColorAllDocs() {
+    var docs = getAllDocs(document);
+    for (var i = 0; i < docs.length; i++) {
+      var doc = docs[i];
+      var caret = doc.__overlayCaret;
+      if (caret) {
+        caret.style.background = CARET_COLOR;
+      }
+      
+      // Update native caret-color CSS
+      try {
+        var existingStyle = doc.getElementById('__docsCaretColorStyle');
+        if (existingStyle) {
+          existingStyle.remove();
+        }
+        
+        var style = doc.createElement('style');
+        style.id = '__docsCaretColorStyle';
+        style.textContent = 'textarea, input, [contenteditable="true"], [role="textbox"], .kix-appview-editor * { caret-color: ' + CARET_COLOR + ' !important; }';
+        (doc.head || doc.documentElement).appendChild(style);
+      } catch (e) {
+        if (DEBUG) warn('Failed to update caret color CSS', e);
+      }
+    }
   }
 
   // =========================
@@ -408,6 +592,18 @@
         e.preventDefault();
         return;
       }
+
+      // Toggle control panel
+      if(e.code==='KeyO'){
+        if (CONTROL_PANEL_VISIBLE) {
+          hideControlPanel();
+        } else {
+          showControlPanel();
+        }
+        console.log('[DocsCaret] Control panel ->', CONTROL_PANEL_VISIBLE);
+        e.preventDefault();
+        return;
+      }
     }, true);
   }
 
@@ -419,6 +615,7 @@
     for(var i=0;i<docs.length;i++){
       ensureCaretForDoc(docs[i]);
       applyRedPointerToDoc(docs[i]);
+      createControlPanel(docs[i]);
     }
 
     var mo=new MutationObserver(function(muts){
@@ -431,6 +628,7 @@
               if(n.contentDocument){
                 ensureCaretForDoc(n.contentDocument);
                 applyRedPointerToDoc(n.contentDocument);
+                createControlPanel(n.contentDocument);
               }
             }catch(e){}
           } else if(n && n.querySelectorAll){
@@ -440,6 +638,7 @@
                 if(nested[k].contentDocument){
                   ensureCaretForDoc(nested[k].contentDocument);
                   applyRedPointerToDoc(nested[k].contentDocument);
+                  createControlPanel(nested[k].contentDocument);
                 }
               }catch(e){}
             }
