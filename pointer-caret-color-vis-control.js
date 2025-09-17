@@ -1,14 +1,17 @@
 /* eslint-disable no-var, prefer-const, no-use-before-define, no-undef */
 /*
+  pointer-caret-color-vis-control.js
   Google Docs High-Contrast Red Caret + Red Pointer (overlay)
-  Implementation file required by docs-caret.user.js
+
+  Implementation file used by docs-caret-vis-control.user.js (the installer stub).
+  You can also load this file directly in Tampermonkey if you prefer a single-file setup.
 
   Notes:
   - Works inside Docs iframes
   - Skips bogus about:blank frames and zero-ish rects
   - Deep debug logging available
   - Hotkeys fully disableable via HOTKEYS = false
-  // author       https://github.com/IanWardell/
+  - Author: https://github.com/IanWardell/
 */
 
 (function () {
@@ -21,17 +24,18 @@
   var CARET_WIDTH   = 1;            // Overlay caret width, px
   var CARET_BLINKMS = 500;          // Overlay caret blink period
   var HOLD_LAST_MS  = 650;          // Keep last caret for brief selection flicker (ms)
-  var DEBUG         = false;         // Set to true for Global debug logs (toggle with Ctrl+Alt+D when HOTKEYS=true)
+  var DEBUG         = false;        // Global debug logs (toggle with Ctrl+Alt+D when HOTKEYS=true)
 
-  var HOTKEYS       = true;         // <— Set to false to disable ALL hotkeys
+  // Master hotkey switch. If false, NO hotkeys are registered.
+  var HOTKEYS       = false;
 
   // Red pointer (arrow) options (toggle with Ctrl+Alt+P when HOTKEYS=true)
   var RED_POINTER_ENABLED = true;            // default ON
   var RED_POINTER_FORCE_EVERYWHERE = false;  // false = keep I-beam in text, true = override everywhere
-  var RED_POINTER_PIXEL_SIZE = 14;           // nominal cursor SVG size (smaller default)
+  var RED_POINTER_PIXEL_SIZE = 12;           // nominal cursor SVG size (small default, matches "ORIG")
 
-  // Pointer size limits for hotkeys
-  var POINTER_MIN = 8;
+  // Pointer size limits for hotkeys (when enabled)
+  var POINTER_MIN = 10;
   var POINTER_MAX = 48;
   var POINTER_STEP = 2;
   var POINTER_TINY_PRESET = 10;
@@ -47,7 +51,7 @@
   function isZeroishRect(r){
     if(!r) return true;
     var h = Math.max(0, r.height || 0);
-    // Reject tiny heights and a common bogus (0,0,16) fallback we observed
+    // Reject tiny heights and a common bogus (0,0,16) fallback
     return (h < 8) || (r.left === 0 && r.top === 0 && h === 16);
   }
 
@@ -225,7 +229,7 @@
       if(d!==targetDoc){ c.style.visibility='hidden'; d.__overlayCaretVisible=false; }
     }
   }
-//iaw
+
   function updateCaretPositionGlobal(reason){
     var found=findActiveSelectionRect();
 
@@ -280,11 +284,13 @@
   // ===== RED POINTER =======
   // =========================
   function buildRedCursorDataURL(pixelSize){
-    var w = Math.max(24, Math.min(64, pixelSize||32)); // clamp internal SVG canvas
-    var h = Math.round(w*1.5);
+    // Keep it small and simple: clamp 12–48, default 12
+    var w = Math.max(12, Math.min(48, pixelSize || 12));
+    var h = Math.round(w * 1.5);
+    // Keep path constant (viewBox 32x48) so hotspot stays consistent; size is controlled by width/height.
     var svg =
       "<svg xmlns='http://www.w3.org/2000/svg' width='"+w+"' height='"+h+"' viewBox='0 0 32 48'>"+
-      "  <path d='M1,1 L1,35 L10,28 L14,46 L20,44 L16,26 L31,26 Z' fill=\"#ff0000\" stroke='white' stroke-width='2'/>"+
+      "  <path d='M1,1 L1,35 L10,28 L14,46 L20,44 L16,26 L31,26 Z' fill='#ff0000' stroke='white' stroke-width='2'/>"+
       "</svg>";
     return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
   }
@@ -307,9 +313,11 @@
 
       // Mode B: non-text areas – try to keep the I-beam in the content editor
       var ruleNonText = [
+        // Editor chrome and panels
         'html, body, .kix-appview-editor, .kix-appview-editor *:not([contenteditable="true"]) {',
         '  cursor: url("'+url+'") 2 2, auto !important;',
         '}',
+        // Do NOT override common text inputs / contenteditable
         '[contenteditable="true"], textarea, input[type="text"], input:not([type]) {',
         '  cursor: auto !important;',
         '}'
@@ -342,6 +350,7 @@
     document.addEventListener('keydown', function(e){
       if(!(e.ctrlKey&&e.altKey)) return;
 
+      // Toggle caret overlay on/off
       if(e.code==='KeyC'){
         var docs=getAllDocs(document);
         var state;
@@ -355,6 +364,7 @@
         return;
       }
 
+      // Toggle DEBUG logs + badge
       if(e.code==='KeyD'){
         DEBUG=!DEBUG;
         var d2=getAllDocs(document);
@@ -363,6 +373,7 @@
         return;
       }
 
+      // Toggle red pointer
       if(e.code==='KeyP'){
         RED_POINTER_ENABLED = !RED_POINTER_ENABLED;
         console.log('[DocsCaret] Red Pointer ->', RED_POINTER_ENABLED);
@@ -371,7 +382,8 @@
         return;
       }
 
-      if(e.key==='-'){
+      // Shrink pointer size
+      if(e.code==='Minus' || e.code==='NumpadSubtract'){
         RED_POINTER_PIXEL_SIZE = Math.max(POINTER_MIN, RED_POINTER_PIXEL_SIZE - POINTER_STEP);
         console.log('[DocsCaret] Pointer size ->', RED_POINTER_PIXEL_SIZE);
         applyRedPointerAllDocs();
@@ -379,7 +391,8 @@
         return;
       }
 
-      if(e.key==='+'){
+      // Grow pointer size
+      if(e.code==='Equal' || e.code==='NumpadAdd'){
         RED_POINTER_PIXEL_SIZE = Math.min(POINTER_MAX, RED_POINTER_PIXEL_SIZE + POINTER_STEP);
         console.log('[DocsCaret] Pointer size ->', RED_POINTER_PIXEL_SIZE);
         applyRedPointerAllDocs();
@@ -387,6 +400,7 @@
         return;
       }
 
+      // Quick preset tiny pointer
       if(e.code==='Digit9'){
         RED_POINTER_PIXEL_SIZE = POINTER_TINY_PRESET;
         console.log('[DocsCaret] Pointer size preset ->', RED_POINTER_PIXEL_SIZE);
@@ -434,7 +448,7 @@
       }
     });
     try{ mo.observe(document.documentElement,{childList:true,subtree:true}); }catch(e){}
-// author       https://github.com/IanWardell/
+
     updateCaretPositionGlobal('init');
     setInterval(applyRedPointerAllDocs, 2000);
     installHotkeys();
