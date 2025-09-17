@@ -3,14 +3,16 @@
   pointer-caret-color-vis-control.js
   Google Docs High-Contrast Red Caret + Red Pointer (overlay)
 
-  Implementation file used by docs-caret-vis-control.user.js (the installer stub).
-  You can also load this file directly in Tampermonkey if you prefer a single-file setup.
+  Implementation used by docs-caret-vis-control.user.js (the installer stub).
+  You can also load this file directly in Tampermonkey for a single-file setup.
 
-  Notes:
-  - Works inside Docs iframes
-  - Skips bogus about:blank frames and zero-ish rects
-  - Deep debug logging available
-  - Hotkeys fully disableable via HOTKEYS = false
+  Features:
+  - Independent color controls for caret and pointer
+  - Pointer size slider
+  - Persist settings via localStorage
+  - Hotkeys (optional) for quick toggles and size changes
+  - Works through Google Docs iframes
+  - Skips bogus about:blank frames / zero-ish rects
   - Author: https://github.com/IanWardell/
 */
 
@@ -20,25 +22,61 @@
   // =========================
   // ======= CONFIG ==========
   // =========================
-  var CARET_COLOR   = '#ff0000';    // Overlay caret color
-  var CARET_WIDTH   = 1;            // Overlay caret width, px
-  var CARET_BLINKMS = 500;          // Overlay caret blink period
-  var HOLD_LAST_MS  = 650;          // Keep last caret for brief selection flicker (ms)
-  var DEBUG         = false;        // Global debug logs (toggle with Ctrl+Alt+D when HOTKEYS=true)
+  var CARET_COLOR         = '#ff0000'; // caret overlay color (persisted)
+  var CARET_WIDTH         = 1;         // caret overlay width, px
+  var CARET_BLINKMS       = 500;       // caret overlay blink period
+  var HOLD_LAST_MS        = 650;       // keep last caret for brief selection flicker (ms)
+  var DEBUG               = false;     // global debug logs (Ctrl+Alt+D when HOTKEYS=true)
 
   // Master hotkey switch. If false, NO hotkeys are registered.
-  var HOTKEYS       = true;
+  var HOTKEYS             = true;
 
-  // Red pointer (arrow) options (toggle with Ctrl+Alt+P when HOTKEYS=true)
-  var RED_POINTER_ENABLED = true;            // default ON
-  var RED_POINTER_FORCE_EVERYWHERE = false;  // false = keep I-beam in text, true = override everywhere
-  var RED_POINTER_PIXEL_SIZE = 12;           // nominal cursor SVG size (small default, matches "ORIG")
+  // Pointer (arrow) options
+  var RED_POINTER_ENABLED = true;             // default ON
+  var RED_POINTER_FORCE_EVERYWHERE = false;   // false = keep I-beam in text, true = override everywhere
+  var RED_POINTER_PIXEL_SIZE = 12;            // pointer size (persisted)
+  var POINTER_COLOR       = '#ff0000';        // pointer color (persisted)
 
   // Pointer size limits for hotkeys (when enabled)
-  var POINTER_MIN = 10;
-  var POINTER_MAX = 48;
-  var POINTER_STEP = 2;
+  var POINTER_MIN         = 10;
+  var POINTER_MAX         = 48;
+  var POINTER_STEP        = 2;
   var POINTER_TINY_PRESET = 10;
+
+  // =========================
+  // ===== PERSISTENCE =======
+  // =========================
+  var LS_KEYS = {
+    caretColor:   'docsCaret.caretColor',
+    pointerColor: 'docsCaret.pointerColor',
+    pointerSize:  'docsCaret.pointerSize'
+  };
+
+  function clamp(n, lo, hi){ return Math.min(hi, Math.max(lo, n)); }
+
+  function loadPrefs(){
+    try{
+      var cc = localStorage.getItem(LS_KEYS.caretColor);
+      if (cc && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(cc)) CARET_COLOR = cc;
+
+      var pc = localStorage.getItem(LS_KEYS.pointerColor);
+      if (pc && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(pc)) POINTER_COLOR = pc;
+
+      var ps = localStorage.getItem(LS_KEYS.pointerSize);
+      if (ps && !isNaN(+ps)) RED_POINTER_PIXEL_SIZE = clamp(parseInt(ps,10), POINTER_MIN, POINTER_MAX);
+    }catch(_){}
+  }
+
+  function savePrefs(){
+    try{
+      localStorage.setItem(LS_KEYS.caretColor, CARET_COLOR);
+      localStorage.setItem(LS_KEYS.pointerColor, POINTER_COLOR);
+      localStorage.setItem(LS_KEYS.pointerSize, String(RED_POINTER_PIXEL_SIZE));
+    }catch(_){}
+  }
+
+  // Load persisted settings immediately
+  loadPrefs();
 
   // =========================
   // ===== UTIL / LOGS =======
@@ -46,6 +84,18 @@
   function log(){ if(DEBUG) console.log.apply(console, ['[DocsCaret]'].concat([].slice.call(arguments))); }
   function warn(){ if(DEBUG) console.warn.apply(console, ['[DocsCaret]'].concat([].slice.call(arguments))); }
   function err(){ if(DEBUG) console.error.apply(console, ['[DocsCaret]'].concat([].slice.call(arguments))); }
+
+  function getContrastColor(hexColor) {
+    try{
+      var r = parseInt(hexColor.substr(1, 2), 16);
+      var g = parseInt(hexColor.substr(3, 2), 16);
+      var b = parseInt(hexColor.substr(5, 2), 16);
+      var luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+      return luminance > 0.5 ? '#000000' : '#ffffff';
+    }catch(_){
+      return '#000000';
+    }
+  }
 
   // "Zero-ish" rect filter. A real caret should have some height and near-zero width.
   function isZeroishRect(r){
@@ -84,62 +134,72 @@
 
   function createControlPanel(doc) {
     if (CONTROL_PANEL_ELEMENT) return CONTROL_PANEL_ELEMENT;
+    // Only create in top document to avoid duplicates
+    if (doc !== window.top.document) return null;
 
     var panel = doc.createElement('div');
     panel.id = '__docsCaretControlPanel';
-    panel.style.cssText = `
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: white;
-      border: 2px solid #333;
-      border-radius: 8px;
-      padding: 20px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-      z-index: 2147483647;
-      font-family: system-ui, Arial, sans-serif;
-      font-size: 14px;
-      min-width: 300px;
-      display: none;
-    `;
+    panel.style.cssText = [
+      'position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);',
+      'background:#fff; border:2px solid #333; border-radius:8px; padding:16px;',
+      'box-shadow:0 4px 20px rgba(0,0,0,0.3); z-index:2147483647;',
+      'font-family:system-ui, Arial, sans-serif; font-size:14px; min-width:340px; display:none;'
+    ].join('');
 
     // Title
     var title = doc.createElement('div');
     title.textContent = 'Docs Caret & Pointer Controls';
-    title.style.cssText = 'font-weight: bold; margin-bottom: 15px; text-align: center; color: #333;';
+    title.style.cssText = 'font-weight:bold; margin-bottom:12px; text-align:center; color:#333;';
     panel.appendChild(title);
 
-    // Caret Color Control
+    // Caret color group
     var caretGroup = doc.createElement('div');
-    caretGroup.style.cssText = 'margin-bottom: 15px;';
-    
+    caretGroup.style.cssText = 'margin-bottom:14px;';
     var caretLabel = doc.createElement('label');
     caretLabel.textContent = 'Caret Color:';
-    caretLabel.style.cssText = 'display: block; margin-bottom: 5px; font-weight: bold;';
+    caretLabel.style.cssText = 'display:block; margin-bottom:6px; font-weight:bold;';
     caretGroup.appendChild(caretLabel);
 
-    var colorInput = doc.createElement('input');
-    colorInput.type = 'color';
-    colorInput.value = CARET_COLOR;
-    colorInput.style.cssText = 'width: 100%; height: 40px; border: 1px solid #ccc; border-radius: 4px; cursor: pointer;';
-    caretGroup.appendChild(colorInput);
+    var caretColorInput = doc.createElement('input');
+    caretColorInput.type = 'color';
+    caretColorInput.value = CARET_COLOR;
+    caretColorInput.style.cssText = 'width:100%; height:40px; border:1px solid #ccc; border-radius:4px; cursor:pointer;';
+    caretGroup.appendChild(caretColorInput);
 
-    // Color preview
-    var colorPreview = doc.createElement('div');
-    colorPreview.textContent = CARET_COLOR;
-    colorPreview.style.cssText = 'margin-top: 5px; padding: 5px; background: #f5f5f5; border-radius: 4px; font-family: monospace; text-align: center;';
-    caretGroup.appendChild(colorPreview);
+    var caretPreview = doc.createElement('div');
+    caretPreview.textContent = CARET_COLOR;
+    caretPreview.style.cssText = 'margin-top:6px; padding:6px; background:#f5f5f5; border-radius:4px; font-family:monospace; text-align:center;';
+    caretGroup.appendChild(caretPreview);
 
     panel.appendChild(caretGroup);
 
-    // Pointer Size Control
+    // Pointer color group
+    var pointerColorGroup = doc.createElement('div');
+    pointerColorGroup.style.cssText = 'margin-bottom:14px;';
+    var pointerColorLabel = doc.createElement('label');
+    pointerColorLabel.textContent = 'Pointer Color:';
+    pointerColorLabel.style.cssText = 'display:block; margin-bottom:6px; font-weight:bold;';
+    pointerColorGroup.appendChild(pointerColorLabel);
+
+    var pointerColorInput = doc.createElement('input');
+    pointerColorInput.type = 'color';
+    pointerColorInput.value = POINTER_COLOR;
+    pointerColorInput.style.cssText = 'width:100%; height:40px; border:1px solid #ccc; border-radius:4px; cursor:pointer;';
+    pointerColorGroup.appendChild(pointerColorInput);
+
+    var pointerColorPreview = doc.createElement('div');
+    pointerColorPreview.textContent = POINTER_COLOR;
+    pointerColorPreview.style.cssText = 'margin-top:6px; padding:6px; background:#f5f5f5; border-radius:4px; font-family:monospace; text-align:center;';
+    pointerColorGroup.appendChild(pointerColorPreview);
+
+    panel.appendChild(pointerColorGroup);
+
+    // Pointer size group
     var pointerGroup = doc.createElement('div');
-    pointerGroup.style.cssText = 'margin-bottom: 15px;';
-    
+    pointerGroup.style.cssText = 'margin-bottom:8px;';
     var pointerLabel = doc.createElement('label');
     pointerLabel.textContent = 'Pointer Size:';
-    pointerLabel.style.cssText = 'display: block; margin-bottom: 5px; font-weight: bold;';
+    pointerLabel.style.cssText = 'display:block; margin-bottom:6px; font-weight:bold;';
     pointerGroup.appendChild(pointerLabel);
 
     var sizeSlider = doc.createElement('input');
@@ -148,50 +208,79 @@
     sizeSlider.max = POINTER_MAX;
     sizeSlider.step = POINTER_STEP;
     sizeSlider.value = RED_POINTER_PIXEL_SIZE;
-    sizeSlider.style.cssText = 'width: 100%; margin-bottom: 5px;';
+    sizeSlider.style.cssText = 'width:100%;';
     pointerGroup.appendChild(sizeSlider);
 
-    // Size display
     var sizeDisplay = doc.createElement('div');
     sizeDisplay.textContent = RED_POINTER_PIXEL_SIZE + 'px';
-    sizeDisplay.style.cssText = 'text-align: center; font-family: monospace; color: #666;';
+    sizeDisplay.style.cssText = 'text-align:center; font-family:monospace; color:#666; margin-top:4px;';
     pointerGroup.appendChild(sizeDisplay);
 
     panel.appendChild(pointerGroup);
 
-    // Close button
+    // Buttons row
+    var btnRow = doc.createElement('div');
+    btnRow.style.cssText = 'display:flex; gap:8px; margin-top:12px;';
+
+    var saveBtn = doc.createElement('button');
+    saveBtn.textContent = 'Save';
+    saveBtn.style.cssText = 'flex:1; padding:8px; background:#28a745; color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:14px;';
+    btnRow.appendChild(saveBtn);
+
+    var exitBtn = doc.createElement('button');
+    exitBtn.textContent = 'Exit';
+    exitBtn.style.cssText = 'flex:1; padding:8px; background:#dc3545; color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:14px;';
+    btnRow.appendChild(exitBtn);
+
     var closeBtn = doc.createElement('button');
     closeBtn.textContent = 'Close (Esc)';
-    closeBtn.style.cssText = `
-      width: 100%;
-      padding: 8px;
-      background: #007cba;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 14px;
-    `;
-    panel.appendChild(closeBtn);
+    closeBtn.style.cssText = 'flex:1; padding:8px; background:#007cba; color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:14px;';
+    btnRow.appendChild(closeBtn);
 
-    // Event handlers
-    colorInput.addEventListener('input', function() {
-      CARET_COLOR = colorInput.value;
-      colorPreview.textContent = CARET_COLOR;
-      colorPreview.style.background = CARET_COLOR;
-      colorPreview.style.color = getContrastColor(CARET_COLOR);
+    panel.appendChild(btnRow);
+
+    // Handlers
+    caretColorInput.addEventListener('input', function() {
+      CARET_COLOR = caretColorInput.value;
+      caretPreview.textContent = CARET_COLOR;
+      caretPreview.style.background = CARET_COLOR;
+      caretPreview.style.color = getContrastColor(CARET_COLOR);
       updateCaretColorAllDocs();
     });
 
+    pointerColorInput.addEventListener('input', function() {
+      POINTER_COLOR = pointerColorInput.value;
+      pointerColorPreview.textContent = POINTER_COLOR;
+      pointerColorPreview.style.background = POINTER_COLOR;
+      pointerColorPreview.style.color = getContrastColor(POINTER_COLOR);
+      applyRedPointerAllDocs(); // rebuilds cursor with new color
+    });
+
     sizeSlider.addEventListener('input', function() {
-      RED_POINTER_PIXEL_SIZE = parseInt(sizeSlider.value);
+      RED_POINTER_PIXEL_SIZE = clamp(parseInt(sizeSlider.value,10), POINTER_MIN, POINTER_MAX);
       sizeDisplay.textContent = RED_POINTER_PIXEL_SIZE + 'px';
       applyRedPointerAllDocs();
     });
 
-    closeBtn.addEventListener('click', function() {
+    function flashGreen(){
+      panel.style.transition = 'background 0.25s';
+      var old = panel.style.background;
+      panel.style.background = '#d4edda';
+      setTimeout(function(){ panel.style.background = old; }, 350);
+    }
+
+    saveBtn.addEventListener('click', function() {
+      savePrefs();
+      flashGreen();
+      log('Preferences saved');
+    });
+
+    exitBtn.addEventListener('click', function() {
+      savePrefs();
       hideControlPanel();
     });
+
+    closeBtn.addEventListener('click', hideControlPanel);
 
     // Close on Escape key
     doc.addEventListener('keydown', function(e) {
@@ -207,53 +296,57 @@
   }
 
   function showControlPanel() {
-    var docs = getAllDocs(document);
-    for (var i = 0; i < docs.length; i++) {
-      var panel = createControlPanel(docs[i]);
-      panel.style.display = 'block';
+    var panel = createControlPanel(window.top.document);
+    if (!panel) return;
+
+    // Sync current values into controls each time it opens
+    var caretInput = panel.querySelector('input[type="color"]');
+    var allColors  = panel.querySelectorAll('input[type="color"]');
+    var pointerInput = (allColors.length > 1) ? allColors[1] : null;
+    var slider = panel.querySelector('input[type="range"]');
+    var previews = panel.querySelectorAll('div');
+
+    if (caretInput) caretInput.value = CARET_COLOR;
+    if (pointerInput) pointerInput.value = POINTER_COLOR;
+    if (slider) slider.value = RED_POINTER_PIXEL_SIZE;
+
+    // Update text previews
+    // crude but robust enough given fixed structure
+    if (previews && previews.length >= 4) {
+      previews[2].textContent = CARET_COLOR;
+      previews[2].style.background = CARET_COLOR;
+      previews[2].style.color = getContrastColor(CARET_COLOR);
+
+      previews[3].textContent = POINTER_COLOR;
+      previews[3].style.background = POINTER_COLOR;
+      previews[3].style.color = getContrastColor(POINTER_COLOR);
     }
+
+    panel.style.display = 'block';
     CONTROL_PANEL_VISIBLE = true;
   }
 
   function hideControlPanel() {
-    if (CONTROL_PANEL_ELEMENT) {
-      CONTROL_PANEL_ELEMENT.style.display = 'none';
-    }
+    if (CONTROL_PANEL_ELEMENT) CONTROL_PANEL_ELEMENT.style.display = 'none';
     CONTROL_PANEL_VISIBLE = false;
-  }
-
-  function getContrastColor(hexColor) {
-    // Convert hex to RGB
-    var r = parseInt(hexColor.substr(1, 2), 16);
-    var g = parseInt(hexColor.substr(3, 2), 16);
-    var b = parseInt(hexColor.substr(5, 2), 16);
-    
-    // Calculate luminance
-    var luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-    
-    return luminance > 0.5 ? '#000000' : '#ffffff';
   }
 
   function updateCaretColorAllDocs() {
     var docs = getAllDocs(document);
     for (var i = 0; i < docs.length; i++) {
-      var doc = docs[i];
-      var caret = doc.__overlayCaret;
+      var d = docs[i];
+      var caret = d.__overlayCaret;
       if (caret) {
         caret.style.background = CARET_COLOR;
       }
-      
       // Update native caret-color CSS
       try {
-        var existingStyle = doc.getElementById('__docsCaretColorStyle');
-        if (existingStyle) {
-          existingStyle.remove();
-        }
-        
-        var style = doc.createElement('style');
+        var existingStyle = d.getElementById('__docsCaretColorStyle');
+        if (existingStyle) existingStyle.remove();
+        var style = d.createElement('style');
         style.id = '__docsCaretColorStyle';
         style.textContent = 'textarea, input, [contenteditable="true"], [role="textbox"], .kix-appview-editor * { caret-color: ' + CARET_COLOR + ' !important; }';
-        (doc.head || doc.documentElement).appendChild(style);
+        (d.head || d.documentElement).appendChild(style);
       } catch (e) {
         if (DEBUG) warn('Failed to update caret color CSS', e);
       }
@@ -299,6 +392,7 @@
         // Best-effort native caret-color
         try{
           var s=doc.createElement('style');
+          s.id='__docsCaretColorStyle';
           s.textContent='textarea, input, [contenteditable="true"], [role="textbox"], .kix-appview-editor * { caret-color: '+CARET_COLOR+' !important; }';
           (doc.head||doc.documentElement).appendChild(s);
         }catch(_){}
@@ -468,13 +562,13 @@
   // ===== RED POINTER =======
   // =========================
   function buildRedCursorDataURL(pixelSize){
-    // Keep it small and simple: clamp 12–48, default 12
-    var w = Math.max(12, Math.min(48, pixelSize || 12));
+    // Clamp 10–48; default 12; keep viewBox static so hotspot remains consistent
+    var w = clamp((pixelSize || 12), 10, 48);
     var h = Math.round(w * 1.5);
-    // Keep path constant (viewBox 32x48) so hotspot stays consistent; size is controlled by width/height.
+    // Use POINTER_COLOR for fill
     var svg =
       "<svg xmlns='http://www.w3.org/2000/svg' width='"+w+"' height='"+h+"' viewBox='0 0 32 48'>"+
-      "  <path d='M1,1 L1,35 L10,28 L14,46 L20,44 L16,26 L31,26 Z' fill='#ff0000' stroke='white' stroke-width='2'/>"+
+      "  <path d='M1,1 L1,35 L10,28 L14,46 L20,44 L16,26 L31,26 Z' fill='"+POINTER_COLOR+"' stroke='white' stroke-width='2'/>"+
       "</svg>";
     return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
   }
@@ -497,11 +591,9 @@
 
       // Mode B: non-text areas – try to keep the I-beam in the content editor
       var ruleNonText = [
-        // Editor chrome and panels
         'html, body, .kix-appview-editor, .kix-appview-editor *:not([contenteditable="true"]) {',
         '  cursor: url("'+url+'") 2 2, auto !important;',
         '}',
-        // Do NOT override common text inputs / contenteditable
         '[contenteditable="true"], textarea, input[type="text"], input:not([type]) {',
         '  cursor: auto !important;',
         '}'
@@ -595,11 +687,8 @@
 
       // Toggle control panel
       if(e.code==='KeyO'){
-        if (CONTROL_PANEL_VISIBLE) {
-          hideControlPanel();
-        } else {
-          showControlPanel();
-        }
+        if (CONTROL_PANEL_VISIBLE) hideControlPanel();
+        else showControlPanel();
         console.log('[DocsCaret] Control panel ->', CONTROL_PANEL_VISIBLE);
         e.preventDefault();
         return;
@@ -610,13 +699,48 @@
   // =========================
   // ========= INIT ==========
   // =========================
+  function getAllDocs(rootDoc){
+    var out=[];
+    function walk(d){
+      if(!d||!d.documentElement) return;
+      out.push(d);
+      var ifr=d.getElementsByTagName('iframe');
+      for(var i=0;i<ifr.length;i++){
+        try{ if(ifr[i].contentDocument) walk(ifr[i].contentDocument); }catch(e){}
+      }
+    }
+    walk(rootDoc||document);
+    return out;
+  }
+
+  function attachDocListeners(doc){
+    var scheduled=false;
+    function schedule(reason){
+      if(scheduled) return; scheduled=true;
+      setTimeout(function(){ scheduled=false; updateCaretPositionGlobal(reason); }, 16);
+    }
+
+    ['selectionchange','keyup','keydown','input','mouseup','mousedown','touchend','touchstart']
+      .forEach(function(ev){ doc.addEventListener(ev, function(){ if(DEBUG) log('Event',ev,'-> update'); schedule(ev); }, true); });
+
+    (doc.defaultView||window).addEventListener('scroll', function(){ schedule('scroll'); }, true);
+    (doc.defaultView||window).addEventListener('resize', function(){ schedule('resize'); }, true);
+
+    // Boot polling to catch editor swaps
+    var tries=0, max=120;
+    var boot=setInterval(function(){ updateCaretPositionGlobal('boot#'+tries); tries++; if(tries>=max) clearInterval(boot); }, 250);
+  }
+
   (function initAll(){
     var docs=getAllDocs(document);
     for(var i=0;i<docs.length;i++){
       ensureCaretForDoc(docs[i]);
       applyRedPointerToDoc(docs[i]);
-      createControlPanel(docs[i]);
+      attachDocListeners(docs[i]);
     }
+
+    // Create panel only in top document
+    createControlPanel(window.top.document);
 
     var mo=new MutationObserver(function(muts){
       for(var i=0;i<muts.length;i++){
@@ -628,7 +752,7 @@
               if(n.contentDocument){
                 ensureCaretForDoc(n.contentDocument);
                 applyRedPointerToDoc(n.contentDocument);
-                createControlPanel(n.contentDocument);
+                attachDocListeners(n.contentDocument);
               }
             }catch(e){}
           } else if(n && n.querySelectorAll){
@@ -638,7 +762,7 @@
                 if(nested[k].contentDocument){
                   ensureCaretForDoc(nested[k].contentDocument);
                   applyRedPointerToDoc(nested[k].contentDocument);
-                  createControlPanel(nested[k].contentDocument);
+                  attachDocListeners(nested[k].contentDocument);
                 }
               }catch(e){}
             }
