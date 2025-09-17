@@ -21,7 +21,7 @@
   var CARET_WIDTH   = 1;            // Overlay caret width, px
   var CARET_BLINKMS = 500;          // Overlay caret blink period
   var HOLD_LAST_MS  = 650;          // Keep last caret for brief selection flicker (ms)
-  var DEBUG         = true;         // Global debug logs (toggle with Ctrl+Alt+D when HOTKEYS=true)
+  var DEBUG         = false;         // Set to true for Global debug logs (toggle with Ctrl+Alt+D when HOTKEYS=true)
 
   var HOTKEYS       = true;         // <— Set to false to disable ALL hotkeys
 
