@@ -334,7 +334,7 @@
     (doc.defaultView||window).addEventListener('resize',  function(){ schedule('resize');  }, { capture:true, passive:true });
 
     // Boot polling to catch editor swaps
-    var tries=0, max=120;
+    var tries=0, max=60;
     var boot=setInterval(function(){ updateCaretPositionGlobal('boot#'+tries); tries++; if(tries>=max) clearInterval(boot); }, 250);
   }
 
@@ -406,7 +406,11 @@
   function createControlPanel(doc) {
     if (CONTROL_PANEL_ELEMENT) return CONTROL_PANEL_ELEMENT;
     // Only create in top document to avoid duplicates
-    if (doc !== window.top.document) return null;
+    try {
+      if (doc !== window.top.document) return null;
+    } catch (_) {
+      return null; // cross-origin top; skip
+    }
 
     var panel = doc.createElement('div');
     panel.id = '__docsCaretControlPanel';
@@ -444,6 +448,10 @@
     caretPreview.textContent = CARET_COLOR;
     caretPreview.style.cssText = 'margin-top:6px; padding:6px; background:#f5f5f5; border-radius:4px; font-family:monospace; text-align:center;';
     caretGroup.appendChild(caretPreview);
+    
+    // Initialize caret preview contrast immediately for better UX
+    caretPreview.style.background = CARET_COLOR;
+    caretPreview.style.color = getContrastColor(CARET_COLOR);
 
     panel.appendChild(caretGroup);
 
@@ -762,7 +770,7 @@
             var pointerInput = panel.querySelector('#__dccpPointerColor');
             var pointerPrev = panel.querySelector('#__dccpPointerPreview');
             var sizeSlider = panel.querySelector('#__dccpPointerSize');
-            var sizeDisplay = panel.querySelector('#__dccpSizeDisplay');
+            var sizeDisplay = panel.querySelector('#__dccpPointerSizeVal');
             
             if (caretInput) caretInput.value = CARET_COLOR;
             if (caretPrev) {
@@ -780,6 +788,9 @@
             if (sizeDisplay) sizeDisplay.textContent = RED_POINTER_PIXEL_SIZE + 'px';
           }
         }
+        
+        // Save the reset values to localStorage
+        savePrefs();
         
         console.log('[DocsCaret] Reset to defaults -> caret:#ff0000, pointer:#ff0000, size:12px');
         e.preventDefault();
