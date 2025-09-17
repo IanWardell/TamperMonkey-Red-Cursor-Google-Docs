@@ -5,17 +5,10 @@ Optionally, it can also replace the mouse pointer with a red arrow for better co
 
 ---
 
-## Examples
-
 ### Animated Demo
 <img src="Docs-cursor-vis-example-light-and-dark-modes.gif" alt="Demo of caret and pointer in light & dark modes" width="500">
 
-### Static Screenshots
-| Light Mode | Dark Mode |
-|------------|-----------|
-| <img src="Screenshot-Light-Mode.png" alt="Light Mode Example" width="400"> | <img src="Screenshot-Dark-Mode.png" alt="Dark Mode Example" width="400"> |
-
----
+--
 
 ## Install Methods
 
@@ -39,6 +32,14 @@ This is an older standalone script. It works, but it is **not actively updated**
 4. Reload any open Google Docs tabs.
 
 ---
+
+### Static Screenshots
+| Light Mode | Dark Mode |
+|------------|-----------|
+| <img src="Screenshot-Light-Mode.png" alt="Light Mode Example" width="400"> | <img src="Screenshot-Dark-Mode.png" alt="Dark Mode Example" width="400"> |
+
+---
+
 
 ## Features
 - High-contrast red caret overlay in Google Docs
