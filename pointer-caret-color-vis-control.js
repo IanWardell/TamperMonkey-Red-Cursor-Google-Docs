@@ -1,27 +1,23 @@
+// ==UserScript==
+// @name         Google Docs: High-Contrast Caret & Pointer (GM storage)
+// @namespace    https://github.com/IanWardell
+// @version      1.2.0
+// @description  High-contrast red caret overlay + customizable red pointer; settings persisted via Tampermonkey GM storage; works across Docs iframes.
+// @author       you
+// @match        https://docs.google.com/*
+// @grant        GM_getValue
+// @grant        GM_setValue
+// @grant        GM_addStyle
+// @run-at       document-idle
+// ==/UserScript==
 /* eslint-disable no-var, prefer-const, no-use-before-define, no-undef */
-/*
-  pointer-caret-color-vis-control.js
-  Google Docs High-Contrast Red Caret + Red Pointer (overlay)
-
-  Implementation used by docs-caret-vis-control.user.js (the installer stub).
-  You can also load this file directly in Tampermonkey for a single-file setup.
-
-  Features:
-  - Independent color controls for caret and pointer (with previews)
-  - Pointer size slider
-  - Persist settings via localStorage
-  - Hotkeys (optional) for quick toggles and size changes
-  - Works through Google Docs iframes
-  - Skips bogus about:blank frames / zero-ish rects
-  - Author: https://github.com/IanWardell/
-*/
 
 (function () {
   'use strict';
 
   // =========================
   // ======= CONFIG ==========
-  // =========================
+// =========================
   var CARET_COLOR         = '#ff0000'; // caret overlay color (persisted)
   var CARET_WIDTH         = 1;         // caret overlay width, px
   var CARET_BLINKMS       = 500;       // caret overlay blink period
@@ -41,38 +37,41 @@
   var POINTER_MIN         = 10;
   var POINTER_MAX         = 48;
   var POINTER_STEP        = 2;
-  var POINTER_TINY_PRESET = 10;
 
   // =========================
   // ===== PERSISTENCE =======
-  // =========================
+// =========================
   var LS_KEYS = {
     caretColor:   'docsCaret.caretColor',
     pointerColor: 'docsCaret.pointerColor',
-    pointerSize:  'docsCaret.pointerSize'
+    pointerSize:  'docsCaret.pointerSize',
   };
 
   function clamp(n, lo, hi){ return Math.min(hi, Math.max(lo, n)); }
 
+  // ---- GM-storage wrappers (shared across all frames) ----
+  function gmGet(key, fallback) {
+    try { return GM_getValue(key, fallback); } catch (_) { return fallback; }
+  }
+  function gmSet(key, value) {
+    try { GM_setValue(key, value); } catch (_) { /* ignore */ }
+  }
+
   function loadPrefs(){
-    try{
-      var cc = localStorage.getItem(LS_KEYS.caretColor);
-      if (cc && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(cc)) CARET_COLOR = cc;
+    var cc = gmGet(LS_KEYS.caretColor, CARET_COLOR);
+    if (cc && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(cc)) CARET_COLOR = cc;
 
-      var pc = localStorage.getItem(LS_KEYS.pointerColor);
-      if (pc && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(pc)) POINTER_COLOR = pc;
+    var pc = gmGet(LS_KEYS.pointerColor, POINTER_COLOR);
+    if (pc && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(pc)) POINTER_COLOR = pc;
 
-      var ps = localStorage.getItem(LS_KEYS.pointerSize);
-      if (ps && !isNaN(+ps)) RED_POINTER_PIXEL_SIZE = clamp(parseInt(ps,10), POINTER_MIN, POINTER_MAX);
-    }catch(_){}
+    var ps = gmGet(LS_KEYS.pointerSize, String(RED_POINTER_PIXEL_SIZE));
+    if (ps && !isNaN(+ps)) RED_POINTER_PIXEL_SIZE = clamp(parseInt(ps,10), POINTER_MIN, POINTER_MAX);
   }
 
   function savePrefs(){
-    try{
-      localStorage.setItem(LS_KEYS.caretColor, CARET_COLOR);
-      localStorage.setItem(LS_KEYS.pointerColor, POINTER_COLOR);
-      localStorage.setItem(LS_KEYS.pointerSize, String(RED_POINTER_PIXEL_SIZE));
-    }catch(_){}
+    gmSet(LS_KEYS.caretColor,   CARET_COLOR);
+    gmSet(LS_KEYS.pointerColor, POINTER_COLOR);
+    gmSet(LS_KEYS.pointerSize,  String(RED_POINTER_PIXEL_SIZE));
   }
 
   // Load persisted settings immediately
@@ -80,10 +79,9 @@
 
   // =========================
   // ===== UTIL / LOGS =======
-  // =========================
+// =========================
   function log(){ if(DEBUG) console.log.apply(console, ['[DocsCaret]'].concat([].slice.call(arguments))); }
   function warn(){ if(DEBUG) console.warn.apply(console, ['[DocsCaret]'].concat([].slice.call(arguments))); }
-  function err(){ if(DEBUG) console.error.apply(console, ['[DocsCaret]'].concat([].slice.call(arguments))); }
 
   function getContrastColor(hexColor) {
     try{
@@ -92,9 +90,7 @@
       var b = parseInt(hexColor.substr(5, 2), 16);
       var luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
       return luminance > 0.5 ? '#000000' : '#ffffff';
-    }catch(_){
-      return '#000000';
-    }
+    }catch(_){ return '#000000'; }
   }
 
   // "Zero-ish" rect filter. A real caret should have some height and near-zero width.
@@ -107,7 +103,7 @@
 
   // =========================
   // ======= DEBUG UI ========
-  // =========================
+// =========================
   function ensureDebugBadge(doc){
     try{
       var id='__docsCaretDebugBadge';
@@ -128,7 +124,7 @@
 
   // =========================
   // ===== CARET OVERLAY =====
-  // =========================
+// =========================
   function ensureCaretForDoc(doc){
     try{
       if(!doc || !doc.documentElement) return null;
@@ -340,7 +336,7 @@
 
   // =========================
   // ===== RED POINTER =======
-  // =========================
+// =========================
   function buildRedCursorDataURL(pixelSize){
     // Clamp 10–48; default 12; keep viewBox static so hotspot remains consistent
     var w = clamp((pixelSize || 12), 10, 48);
@@ -399,18 +395,14 @@
 
   // =========================
   // ===== CONTROL PANEL =====
-  // =========================
+// =========================
   var CONTROL_PANEL_VISIBLE = false;
   var CONTROL_PANEL_ELEMENT = null;
 
   function createControlPanel(doc) {
     if (CONTROL_PANEL_ELEMENT) return CONTROL_PANEL_ELEMENT;
     // Only create in top document to avoid duplicates
-    try {
-      if (doc !== window.top.document) return null;
-    } catch (_) {
-      return null; // cross-origin top; skip
-    }
+    try { if (doc !== window.top.document) return null; } catch (_) { return null; }
 
     var panel = doc.createElement('div');
     panel.id = '__docsCaretControlPanel';
@@ -448,8 +440,8 @@
     caretPreview.textContent = CARET_COLOR;
     caretPreview.style.cssText = 'margin-top:6px; padding:6px; background:#f5f5f5; border-radius:4px; font-family:monospace; text-align:center;';
     caretGroup.appendChild(caretPreview);
-    
-    // Initialize caret preview contrast immediately for better UX
+
+    // Initialize caret preview contrast immediately
     caretPreview.style.background = CARET_COLOR;
     caretPreview.style.color = getContrastColor(CARET_COLOR);
 
@@ -533,42 +525,17 @@
     // Hotkeys tooltip section
     var tooltipSection = doc.createElement('div');
     tooltipSection.style.cssText = 'margin-top:16px; padding:12px; background:#f8f9fa; border:1px solid #dee2e6; border-radius:6px; font-size:12px;';
-    
     var tooltipTitle = doc.createElement('div');
     tooltipTitle.textContent = 'Hotkeys (Ctrl+Alt+):';
     tooltipTitle.style.cssText = 'font-weight:bold; margin-bottom:8px; color:#495057;';
     tooltipSection.appendChild(tooltipTitle);
-    
     var hotkeyList = doc.createElement('div');
     hotkeyList.style.cssText = 'display:grid; grid-template-columns:1fr 1fr; gap:4px 12px; font-family:monospace;';
-    
-    var hotkeys = [
-      ['O', 'Toggle this panel'],
-      ['C', 'Toggle caret overlay'],
-      ['P', 'Toggle red pointer'],
-      ['D', 'Toggle debug mode'],
-      ['+', 'Increase pointer size'],
-      ['-', 'Decrease pointer size'],
-      ['9', 'Reset to defaults']
-    ];
-    
-    hotkeys.forEach(function(hotkey) {
-      var hotkeyItem = doc.createElement('div');
-      hotkeyItem.style.cssText = 'display:flex; justify-content:space-between; align-items:center;';
-      
-      var keySpan = doc.createElement('span');
-      keySpan.textContent = hotkey[0];
-      keySpan.style.cssText = 'background:#e9ecef; padding:2px 6px; border-radius:3px; font-weight:bold; min-width:20px; text-align:center;';
-      
-      var descSpan = doc.createElement('span');
-      descSpan.textContent = hotkey[1];
-      descSpan.style.cssText = 'color:#6c757d;';
-      
-      hotkeyItem.appendChild(keySpan);
-      hotkeyItem.appendChild(descSpan);
-      hotkeyList.appendChild(hotkeyItem);
-    });
-    
+    [['O','Toggle this panel'],['C','Toggle caret overlay'],['P','Toggle red pointer'],['D','Toggle debug mode'],['+','Increase pointer size'],['-','Decrease pointer size'],['9','Reset to defaults']]
+      .forEach(function(h){ var row=doc.createElement('div'); row.style.cssText='display:flex; justify-content:space-between; align-items:center;';
+        var k=doc.createElement('span'); k.textContent=h[0]; k.style.cssText='background:#e9ecef; padding:2px 6px; border-radius:3px; font-weight:bold; min-width:20px; text-align:center;';
+        var d=doc.createElement('span'); d.textContent=h[1]; d.style.cssText='color:#6c757d;';
+        row.appendChild(k); row.appendChild(d); hotkeyList.appendChild(row); });
     tooltipSection.appendChild(hotkeyList);
     panel.appendChild(tooltipSection);
 
@@ -671,9 +638,8 @@
     for (var i = 0; i < docs.length; i++) {
       var d = docs[i];
       var caret = d.__overlayCaret;
-      if (caret) {
-        caret.style.background = CARET_COLOR;
-      }
+      if (caret) caret.style.background = CARET_COLOR;
+
       // Update native caret-color CSS
       try {
         var existingStyle = d.getElementById('__docsCaretColorStyle');
@@ -682,15 +648,13 @@
         style.id = '__docsCaretColorStyle';
         style.textContent = 'textarea, input, [contenteditable="true"], [role="textbox"], .kix-appview-editor * { caret-color: ' + CARET_COLOR + ' !important; }';
         (d.head || d.documentElement).appendChild(style);
-      } catch (e) {
-        if (DEBUG) warn('Failed to update caret color CSS', e);
-      }
+      } catch (e) { if (DEBUG) warn('Failed to update caret color CSS', e); }
     }
   }
 
   // =========================
   // ======= HOTKEYS =========
-  // =========================
+// =========================
   function installHotkeysOnDoc(doc){
     if (!HOTKEYS) return;
     if (!doc || doc.__docsCaretHotkeysInstalled) return;
@@ -709,8 +673,7 @@
           if(!d.__overlayCaretEnabled && d.__overlayCaret){ d.__overlayCaret.style.visibility='hidden'; d.__overlayCaretVisible=false; }
           state=d.__overlayCaretEnabled; ensureDebugBadge(d);
         }
-        log('Toggle caret enabled ->', state); e.preventDefault();
-        return;
+        log('Toggle caret enabled ->', state); e.preventDefault(); return;
       }
 
       // Toggle DEBUG logs + badge
@@ -718,8 +681,7 @@
         DEBUG=!DEBUG;
         var d2=getAllDocs(document);
         for(var j=0;j<d2.length;j++) ensureDebugBadge(d2[j]);
-        console.log('[DocsCaret] DEBUG ->', DEBUG); e.preventDefault();
-        return;
+        console.log('[DocsCaret] DEBUG ->', DEBUG); e.preventDefault(); return;
       }
 
       // Toggle red pointer
@@ -727,8 +689,7 @@
         RED_POINTER_ENABLED = !RED_POINTER_ENABLED;
         console.log('[DocsCaret] Red Pointer ->', RED_POINTER_ENABLED);
         applyRedPointerAllDocs();
-        e.preventDefault();
-        return;
+        e.preventDefault(); return;
       }
 
       // Shrink pointer size
@@ -736,8 +697,8 @@
         RED_POINTER_PIXEL_SIZE = Math.max(POINTER_MIN, RED_POINTER_PIXEL_SIZE - POINTER_STEP);
         console.log('[DocsCaret] Pointer size ->', RED_POINTER_PIXEL_SIZE);
         applyRedPointerAllDocs();
-        e.preventDefault();
-        return;
+        savePrefs();
+        e.preventDefault(); return;
       }
 
       // Grow pointer size
@@ -745,56 +706,45 @@
         RED_POINTER_PIXEL_SIZE = Math.min(POINTER_MAX, RED_POINTER_PIXEL_SIZE + POINTER_STEP);
         console.log('[DocsCaret] Pointer size ->', RED_POINTER_PIXEL_SIZE);
         applyRedPointerAllDocs();
-        e.preventDefault();
-        return;
+        savePrefs();
+        e.preventDefault(); return;
       }
 
-      // Reset all settings to defaults
+      // Reset all settings to defaults (and persist via GM storage)
       if(e.code==='Digit9'){
-        // Reset to default values
         CARET_COLOR = '#ff0000';
         POINTER_COLOR = '#ff0000';
         RED_POINTER_PIXEL_SIZE = 12;
         RED_POINTER_ENABLED = true;
-        
-        // Update all documents
+
         updateCaretColorAllDocs();
         applyRedPointerAllDocs();
-        
+
         // Update control panel if visible
         if (CONTROL_PANEL_VISIBLE) {
           var panel = CONTROL_PANEL_ELEMENT;
           if (panel) {
             var caretInput = panel.querySelector('#__dccpCaretColor');
-            var caretPrev = panel.querySelector('#__dccpCaretPreview');
+            var caretPrev  = panel.querySelector('#__dccpCaretPreview');
             var pointerInput = panel.querySelector('#__dccpPointerColor');
-            var pointerPrev = panel.querySelector('#__dccpPointerPreview');
-            var sizeSlider = panel.querySelector('#__dccpPointerSize');
-            var sizeDisplay = panel.querySelector('#__dccpPointerSizeVal');
-            
+            var pointerPrev  = panel.querySelector('#__dccpPointerPreview');
+            var sizeSlider   = panel.querySelector('#__dccpPointerSize');
+            var sizeDisplay  = panel.querySelector('#__dccpPointerSizeVal');
+
             if (caretInput) caretInput.value = CARET_COLOR;
-            if (caretPrev) {
-              caretPrev.textContent = CARET_COLOR;
-              caretPrev.style.background = CARET_COLOR;
-              caretPrev.style.color = getContrastColor(CARET_COLOR);
-            }
+            if (caretPrev)  { caretPrev.textContent = CARET_COLOR; caretPrev.style.background = CARET_COLOR; caretPrev.style.color = getContrastColor(CARET_COLOR); }
             if (pointerInput) pointerInput.value = POINTER_COLOR;
-            if (pointerPrev) {
-              pointerPrev.textContent = POINTER_COLOR;
-              pointerPrev.style.background = POINTER_COLOR;
-              pointerPrev.style.color = getContrastColor(POINTER_COLOR);
-            }
-            if (sizeSlider) sizeSlider.value = RED_POINTER_PIXEL_SIZE;
-            if (sizeDisplay) sizeDisplay.textContent = RED_POINTER_PIXEL_SIZE + 'px';
+            if (pointerPrev)  { pointerPrev.textContent = POINTER_COLOR; pointerPrev.style.background = POINTER_COLOR; pointerPrev.style.color = getContrastColor(POINTER_COLOR); }
+            if (sizeSlider)   sizeSlider.value = RED_POINTER_PIXEL_SIZE;
+            if (sizeDisplay)  sizeDisplay.textContent = RED_POINTER_PIXEL_SIZE + 'px';
           }
         }
-        
-        // Save the reset values to localStorage
+
+        // Persist defaults
         savePrefs();
-        
+
         console.log('[DocsCaret] Reset to defaults -> caret:#ff0000, pointer:#ff0000, size:12px');
-        e.preventDefault();
-        return;
+        e.preventDefault(); return;
       }
 
       // Toggle control panel
@@ -802,8 +752,7 @@
         if (CONTROL_PANEL_VISIBLE) hideControlPanel();
         else showControlPanel();
         console.log('[DocsCaret] Control panel ->', CONTROL_PANEL_VISIBLE);
-        e.preventDefault();
-        return;
+        e.preventDefault(); return;
       }
     }, true);
   }
@@ -817,7 +766,13 @@
 
   // =========================
   // ========= INIT ==========
-  // =========================
+// =========================
+  function applyRedPointerBoot() {
+    // helpful when the script starts in an iframe first
+    applyRedPointerAllDocs();
+    setInterval(applyRedPointerAllDocs, 5000); // MutationObserver will handle most cases; this is a slow backstop.
+  }
+
   function initAll(){
     var docs=getAllDocs(document);
     for(var i=0;i<docs.length;i++){
@@ -827,7 +782,7 @@
     }
 
     // Create panel only in top document
-    createControlPanel(window.top.document);
+    try { createControlPanel(window.top.document); } catch(_) {}
 
     // Install hotkeys on every reachable doc/iframe
     installHotkeysAllDocs();
@@ -865,9 +820,10 @@
     try{ mo.observe(document.documentElement,{childList:true,subtree:true}); }catch(e){}
 
     updateCaretPositionGlobal('init');
-    setInterval(applyRedPointerAllDocs, 5000); // Reduced from 2000ms to 5000ms - MutationObserver handles new iframes
+    applyRedPointerBoot();
   }
 
+  // Kickoff
   initAll();
 
 })();
