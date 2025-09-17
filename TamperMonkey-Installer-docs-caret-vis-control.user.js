@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Google Docs High-Contrast Red Caret + Red Pointer (overlay, v1.9 HOTKEY toggle)
 // @namespace    https://carethelp.example
-// @version      1.9
+// @version      2
 // @description  Bright red overlay caret + optional red mouse pointer in Google Docs. Skips bogus about:blank frames, ignores zero rects, and includes deep debug logging. HOTKEYS master toggle included.
 // @author       https://github.com/IanWardell/
 // @homepageURL  https://github.com/IanWardell/TamperMonkey-Red-Cursor-Google-Docs
