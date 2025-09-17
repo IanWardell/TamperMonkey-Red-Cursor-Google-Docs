@@ -548,6 +548,15 @@
   // =========================
   var CONTROL_PANEL_VISIBLE = false;
   var CONTROL_PANEL_ELEMENT = null;
+  var caretOverlayLabel = null;
+  var pointerOverlayLabel = null;
+
+  function updateColorOverlay(labelEl, color) {
+    if (!labelEl || !color) return;
+    labelEl.textContent = String(color).toUpperCase();
+    labelEl.style.color = getContrastColor(color);
+    labelEl.style.textShadow = '0 0 4px rgba(0,0,0,0.35)';
+  }
 
   function createControlPanel(doc) {
     if (CONTROL_PANEL_ELEMENT) return CONTROL_PANEL_ELEMENT;
@@ -581,15 +590,16 @@
     caretColorInput.id = '__dccpCaretColor';
     caretColorInput.value = CARET_COLOR;
     caretColorInput.style.cssText = 'width:100%; height:40px; border:1px solid #ccc; border-radius:4px; cursor:pointer;';
-    caretGroup.appendChild(caretColorInput);
-
-    var caretPreview = doc.createElement('div');
-    caretPreview.id = '__dccpCaretPreview';
-    caretPreview.textContent = CARET_COLOR;
-    caretPreview.style.cssText = 'margin-top:6px; padding:6px; background:#f5f5f5; border-radius:4px; font-family:monospace; text-align:center;';
-    caretPreview.style.background = CARET_COLOR;
-    caretPreview.style.color = getContrastColor(CARET_COLOR);
-    caretGroup.appendChild(caretPreview);
+    var caretWrapper = doc.createElement('div');
+    caretWrapper.style.cssText = 'position:relative; margin-top:6px;';
+    caretWrapper.appendChild(caretColorInput);
+    var caretOverlay = doc.createElement('span');
+    caretOverlay.id = '__dccpCaretOverlay';
+    caretOverlay.style.cssText = 'position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); font-family:monospace; font-weight:600; pointer-events:none; letter-spacing:0.5px;';
+    caretWrapper.appendChild(caretOverlay);
+    caretGroup.appendChild(caretWrapper);
+    caretOverlayLabel = caretOverlay;
+    updateColorOverlay(caretOverlayLabel, CARET_COLOR);
     panel.appendChild(caretGroup);
 
     // Pointer color
@@ -606,13 +616,16 @@
     pointerColorInput.id = '__dccpPointerColor';
     pointerColorInput.value = POINTER_COLOR;
     pointerColorInput.style.cssText = 'width:100%; height:40px; border:1px solid #ccc; border-radius:4px; cursor:pointer;';
-    pointerColorGroup.appendChild(pointerColorInput);
-
-    var pointerColorPreview = doc.createElement('div');
-    pointerColorPreview.id = '__dccpPointerPreview';
-    pointerColorPreview.textContent = POINTER_COLOR;
-    pointerColorPreview.style.cssText = 'margin-top:6px; padding:6px; background:#f5f5f5; border-radius:4px; font-family:monospace; text-align:center;';
-    pointerColorGroup.appendChild(pointerColorPreview);
+    var pointerWrapper = doc.createElement('div');
+    pointerWrapper.style.cssText = 'position:relative; margin-top:6px;';
+    pointerWrapper.appendChild(pointerColorInput);
+    var pointerOverlay = doc.createElement('span');
+    pointerOverlay.id = '__dccpPointerOverlay';
+    pointerOverlay.style.cssText = 'position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); font-family:monospace; font-weight:600; pointer-events:none; letter-spacing:0.5px;';
+    pointerWrapper.appendChild(pointerOverlay);
+    pointerColorGroup.appendChild(pointerWrapper);
+    pointerOverlayLabel = pointerOverlay;
+    updateColorOverlay(pointerOverlayLabel, POINTER_COLOR);
     panel.appendChild(pointerColorGroup);
 
     // Pointer size
@@ -673,18 +686,14 @@
     // Live-save & live-broadcast on input (no need to press Save)
     caretColorInput.addEventListener('input', function() {
       CARET_COLOR = caretColorInput.value;
-      caretPreview.textContent = CARET_COLOR;
-      caretPreview.style.background = CARET_COLOR;
-      caretPreview.style.color = getContrastColor(CARET_COLOR);
+      updateColorOverlay(caretOverlayLabel, CARET_COLOR);
       updateCaretColorAllDocs();
       savePrefs();
     });
 
     pointerColorInput.addEventListener('input', function() {
       POINTER_COLOR = pointerColorInput.value;
-      pointerColorPreview.textContent = POINTER_COLOR;
-      pointerColorPreview.style.background = POINTER_COLOR;
-      pointerColorPreview.style.color = getContrastColor(POINTER_COLOR);
+      updateColorOverlay(pointerOverlayLabel, POINTER_COLOR);
       applyRedPointerAllDocs();
       savePrefs();
     });
@@ -720,16 +729,14 @@
     if (!CONTROL_PANEL_VISIBLE || !CONTROL_PANEL_ELEMENT) return;
     var panel = CONTROL_PANEL_ELEMENT;
     var caretInput   = panel.querySelector('#__dccpCaretColor');
-    var caretPrev    = panel.querySelector('#__dccpCaretPreview');
     var pointerInput = panel.querySelector('#__dccpPointerColor');
-    var pointerPrev  = panel.querySelector('#__dccpPointerPreview');
     var slider       = panel.querySelector('#__dccpPointerSize');
     var sizeVal      = panel.querySelector('#__dccpPointerSizeVal');
 
     if (caretInput) caretInput.value = CARET_COLOR;
-    if (caretPrev)  { caretPrev.textContent = CARET_COLOR; caretPrev.style.background = CARET_COLOR; caretPrev.style.color = getContrastColor(CARET_COLOR); }
+    updateColorOverlay(caretOverlayLabel, CARET_COLOR);
     if (pointerInput) pointerInput.value = POINTER_COLOR;
-    if (pointerPrev)  { pointerPrev.textContent = POINTER_COLOR; pointerPrev.style.background = POINTER_COLOR; pointerPrev.style.color = getContrastColor(POINTER_COLOR); }
+    updateColorOverlay(pointerOverlayLabel, POINTER_COLOR);
     if (slider) slider.value = RED_POINTER_PIXEL_SIZE;
     if (sizeVal) sizeVal.textContent = RED_POINTER_PIXEL_SIZE + 'px';
   }
