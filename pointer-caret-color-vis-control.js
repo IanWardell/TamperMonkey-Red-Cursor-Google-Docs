@@ -72,26 +72,54 @@
   // Try to adopt GM adapter, even if it appears later (because @require order)
   function adoptGMAdapterIfReady() {
     if (ADOPTED_GM) return;
-    var a = (typeof window !== 'undefined') ? window.__DocsCaretStorage : null;
-    if (!a || typeof a.get !== 'function' || typeof a.set !== 'function') return;
+    var adapter = (typeof window !== 'undefined') ? window.__DocsCaretStorage : null;
+    if (!adapter || typeof adapter.get !== 'function' || typeof adapter.set !== 'function') return;
+
+    var previousState = {
+      caret: CARET_COLOR,
+      pointer: POINTER_COLOR,
+      size: RED_POINTER_PIXEL_SIZE
+    };
+
+    function adapterGet(key) {
+      try { return adapter.get(key, null); } catch (_) { return null; }
+    }
+
+    var gmCaret   = adapterGet(LS_KEYS.caretColor);
+    var gmPointer = adapterGet(LS_KEYS.pointerColor);
+    var gmSize    = adapterGet(LS_KEYS.pointerSize);
+    var gmHasPrefs = Boolean(
+      (typeof gmCaret === 'string' && gmCaret.length) ||
+      (typeof gmPointer === 'string' && gmPointer.length) ||
+      (gmSize !== undefined && gmSize !== null)
+    );
 
     // Switch Storage to GM-backed adapter
     Storage = {
-      get: a.get,
-      set: a.set,
-      onChange: (typeof a.onChange === 'function') ? a.onChange : function(){}
+      get: adapter.get,
+      set: adapter.set,
+      onChange: (typeof adapter.onChange === 'function') ? adapter.onChange : function(){}
     };
     ADOPTED_GM = true;
 
-    // Re-wire GM change listeners so other tabs push updates here
-    installValueChangeListeners();
+    // Allow listeners to re-register under the GM adapter
+    installValueChangeListeners._installed = false;
+    installValueChangeListeners(true);
 
-    // Push our current prefs into GM storage so *other* tabs get notified, too
-    // (and so future tabs read the correct values)
-    savePrefs();
-
-    // Also broadcast on the channel to notify sibling tabs immediately
-    broadcastCurrentPrefs();
+    if (gmHasPrefs) {
+      var changed = loadPrefs();
+      if (changed) {
+        updateCaretColorAllDocs();
+        applyRedPointerAllDocs();
+        syncPanelUI();
+      }
+    } else {
+      // No GM-backed data yet -> migrate whatever we already have
+      CARET_COLOR = previousState.caret;
+      POINTER_COLOR = previousState.pointer;
+      RED_POINTER_PIXEL_SIZE = previousState.size;
+      savePrefs();
+    }
   }
 
   // Poll briefly to adopt the adapter if the stub defines it after this script runs
@@ -128,14 +156,30 @@
   // Load and live-sync prefs
   // ---------------------------
   function loadPrefs(){
-    var cc = Storage.get(LS_KEYS.caretColor, CARET_COLOR);
-    if (cc && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(cc)) CARET_COLOR = cc;
+    var changed = false;
 
-    var pc = Storage.get(LS_KEYS.pointerColor, POINTER_COLOR);
-    if (pc && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(pc)) POINTER_COLOR = pc;
+    var cc = Storage.get(LS_KEYS.caretColor);
+    if (typeof cc === 'string' && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(cc)) {
+      if (cc !== CARET_COLOR) changed = true;
+      CARET_COLOR = cc;
+    }
 
-    var ps = Storage.get(LS_KEYS.pointerSize, String(RED_POINTER_PIXEL_SIZE));
-    if (ps && !isNaN(+ps)) RED_POINTER_PIXEL_SIZE = clamp(parseInt(ps,10), POINTER_MIN, POINTER_MAX);
+    var pc = Storage.get(LS_KEYS.pointerColor);
+    if (typeof pc === 'string' && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(pc)) {
+      if (pc !== POINTER_COLOR) changed = true;
+      POINTER_COLOR = pc;
+    }
+
+    var ps = Storage.get(LS_KEYS.pointerSize);
+    if (ps !== undefined && ps !== null && ps !== '') {
+      var n = clamp(parseInt(ps, 10), POINTER_MIN, POINTER_MAX);
+      if (!isNaN(n) && n !== RED_POINTER_PIXEL_SIZE) {
+        RED_POINTER_PIXEL_SIZE = n;
+        changed = true;
+      }
+    }
+
+    return changed;
   }
 
   function savePrefs(){
@@ -155,9 +199,8 @@
   }
 
   // React to remote changes (GM or localStorage)
-  function installValueChangeListeners(){
-    // Avoid duplicating listeners when adopting GM later:
-    if (installValueChangeListeners._installed) return;
+  function installValueChangeListeners(force){
+    if (!force && installValueChangeListeners._installed) return;
     installValueChangeListeners._installed = true;
 
     Storage.onChange(LS_KEYS.caretColor, function(newVal){
