@@ -3,6 +3,31 @@
 A lightweight TamperMonkey userscript that makes the text caret (blinking cursor) bright red in Google Docs for improved visibility.  
 Optionally, it can also replace the mouse pointer with a red arrow for better contrast.
 
+---
+
+## Install Methods
+
+There are two ways to install this script. Most users should use **Option 1 (Recommended)**.  
+Option 2 is provided only for reference and is not maintained long term.
+
+### Option 1: Recommended – Launcher Stub
+This method uses a tiny stub file (`docs-caret-vis-control.user.js`) that automatically pulls in the full implementation and keeps it updated.
+
+1. Install [TamperMonkey](https://www.tampermonkey.net/).
+2. Open the **Raw** link to [`TamperMonkey-Installer-docs-caret-vis-control.user.js`](https://raw.githubusercontent.com/IanWardell/TamperMonkey-Red-Cursor-Google-Docs/main/TamperMonkey-Installer-docs-caret-vis-control.user.js).  
+   TamperMonkey will prompt to install or update automatically.
+3. Reload any open Google Docs tabs.
+
+### Option 2: Manual – Legacy Script (Not Updated Long Term)
+This is an older standalone script. It works, but it is **not actively updated**. Use only if you specifically want a single self-contained script without relying on the stub.
+
+1. Install [TamperMonkey](https://www.tampermonkey.net/).
+2. Open the **Raw** link to [`tampermonkey-cursor-control.js`](https://github.com/IanWardell/TamperMonkey-Red-Cursor-Google-Docs/blob/main/tampermonkey-cursor-control.js).
+3. Copy/paste the contents into a new TamperMonkey script or confirm the installation prompt.
+4. Reload any open Google Docs tabs.
+
+---
+
 ## Features
 - High-contrast red caret overlay in Google Docs
 - Optional red mouse pointer (with adjustable size)
@@ -27,29 +52,6 @@ Use `Ctrl+Alt+` + key combinations:
 - `P` – toggle red pointer
 - `- / +` – decrease / increase pointer size
 - `9` – reset pointer size to a tiny preset
-
----
-
-## Install Methods
-
-There are two ways to install this script. Most users should use **Option 1 (Recommended)**.  
-Option 2 is provided only for reference and is not maintained long term.
-
-### Option 1: Recommended – Launcher Stub
-This method uses a tiny stub file (`docs-caret-vis-control.user.js`) that automatically pulls in the full implementation and keeps it updated.
-
-1. Install [TamperMonkey](https://www.tampermonkey.net/).
-2. Open the **Raw** link to [`TamperMonkey-Installer-docs-caret-vis-control.user.js`](https://raw.githubusercontent.com/IanWardell/TamperMonkey-Red-Cursor-Google-Docs/main/TamperMonkey-Installer-docs-caret-vis-control.user.js).  
-   TamperMonkey will prompt to install or update automatically.
-3. Reload any open Google Docs tabs.
-
-### Option 2: Manual – Legacy Script (Not Updated Long Term)
-This is an older standalone script. It works, but it is **not actively updated**. Use only if you specifically want a single self-contained script without relying on the stub.
-
-1. Install [TamperMonkey](https://www.tampermonkey.net/).
-2. Open the **Raw** link to [`tampermonkey-cursor-control.js`](https://github.com/IanWardell/TamperMonkey-Red-Cursor-Google-Docs/blob/main/tampermonkey-cursor-control.js).
-3. Copy/paste the contents into a new TamperMonkey script or confirm the installation prompt.
-4. Reload any open Google Docs tabs.
 
 ---
 
