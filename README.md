@@ -39,7 +39,7 @@ Option 2 is provided only for reference and is not maintained long term.
 This method uses a tiny stub file (`docs-caret-vis-control.user.js`) that automatically pulls in the full implementation and keeps it updated.
 
 1. Install [TamperMonkey](https://www.tampermonkey.net/).
-2. Open the **Raw** link to [`docs-caret-vis-control.user.js`](https://raw.githubusercontent.com/IanWardell/TamperMonkey-Red-Cursor-Google-Docs/main/docs-caret-vis-control.user.js).  
+2. Open the **Raw** link to [`TamperMonkey-Installer-docs-caret-vis-control.user.js`](https://raw.githubusercontent.com/IanWardell/TamperMonkey-Red-Cursor-Google-Docs/main/TamperMonkey-Installer-docs-caret-vis-control.user.js).  
    TamperMonkey will prompt to install or update automatically.
 3. Reload any open Google Docs tabs.
 
