@@ -71,7 +71,7 @@ Use `Ctrl+Alt+` + key combinations:
 - `D` – toggle debug logging
 - `P` – toggle red pointer
 - `- / +` – decrease / increase pointer size
-- `9` – reset pointer size to a tiny preset
+- `9` – reset all colors and pointer size to a defaults preset
 - `O` – open/close the control panel (caret color, pointer color, pointer size)
 
 ---
