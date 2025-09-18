@@ -69,7 +69,7 @@ This is an older standalone script. It works, but it is **not actively updated**
 Use `Ctrl+Alt+` + key combinations:
 - `C` – toggle caret overlay
 - `D` – toggle debug logging
-- `P` – toggle red pointer
+- `M` – toggle red pointer
 - `- / +` – decrease / increase pointer size
 - `9` – reset all colors and pointer size to a defaults preset
 - `O` – open/close the control panel (caret color, pointer color, pointer size)

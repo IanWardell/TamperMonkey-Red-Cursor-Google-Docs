@@ -684,7 +684,7 @@
 
     var help = doc.createElement('div');
     help.style.cssText='margin-top:12px; font:12px/1.4 system-ui,Arial,sans-serif; color:#444;';
-    help.textContent='Hotkeys: Ctrl+Alt+O (panel), C (caret), P (pointer), S (save), D (debug), -/+(size), 9 (reset defaults).';
+    help.textContent='Hotkeys: Ctrl+Alt+O (panel), C (caret), M (pointer), S (save), D (debug), -/+(size), 9 (reset defaults).';
     panel.appendChild(help);
 
     // Live-save & live-broadcast on input (no need to press Save)
@@ -770,7 +770,7 @@
 
       if(e.code==='KeyC'){ toggleCaret(); e.preventDefault(); return; }
       if(e.code==='KeyD'){ toggleDebug(); e.preventDefault(); return; }
-      if(e.code==='KeyP'){ togglePointer(); e.preventDefault(); return; }
+      if(e.code==='KeyM'){ togglePointer(); e.preventDefault(); return; }
       if(e.code==='KeyS'){ savePrefs(); flashPanelSaved(); console.log('[DocsCaret] Preferences saved (hotkey)'); e.preventDefault(); return; }
 
       if(e.code==='Minus' || e.code==='NumpadSubtract'){
