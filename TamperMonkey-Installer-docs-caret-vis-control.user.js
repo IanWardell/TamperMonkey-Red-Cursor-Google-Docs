@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name         High-Contrast Customizable Color Caret & Pointer
 // @namespace    https://github.com/IanWardell/TamperMonkey-Red-Cursor-Google-Docs
-// @version      2.0.0
+// @version      1.0.0
 // @description  Default red overlay caret + mouse pointer with customizable color and size built for use in Google Docs. With control panel and settings persistence. Includes optional debug logging. HOTKEYS master toggle included.
 // @author       https://github.com/IanWardell/
 // @homepageURL  https://github.com/IanWardell/TamperMonkey-Red-Cursor-Google-Docs
 // @supportURL   https://github.com/IanWardell/TamperMonkey-Red-Cursor-Google-Docs/issues
 // @license      MIT
-// @match        https://docs.google.com/document/*
+// @match        https://docs.google.com/document/d/*
 // @run-at       document-start
 // @downloadURL  https://raw.githubusercontent.com/IanWardell/TamperMonkey-Red-Cursor-Google-Docs/main/docs-caret-vis-control.user.js
 // @updateURL    https://raw.githubusercontent.com/IanWardell/TamperMonkey-Red-Cursor-Google-Docs/main/docs-caret-vis-control.user.js

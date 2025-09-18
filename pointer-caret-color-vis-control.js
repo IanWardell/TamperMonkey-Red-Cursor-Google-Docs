@@ -551,6 +551,16 @@
   var caretOverlayLabel = null;
   var pointerOverlayLabel = null;
 
+  function flashPanelSaved(panelEl) {
+    var el = panelEl || CONTROL_PANEL_ELEMENT;
+    if (!el) return;
+    var original = el.dataset.bgOriginal || el.style.background || '#fff';
+    el.dataset.bgOriginal = original;
+    el.style.transition = 'background 0.25s';
+    el.style.background = '#d4edda';
+    setTimeout(function(){ el.style.background = el.dataset.bgOriginal || original; }, 350);
+  }
+
   function updateColorOverlay(labelEl, color) {
     if (!labelEl || !color) return;
     labelEl.textContent = String(color).toUpperCase();
@@ -659,16 +669,10 @@
     btnRow.style.cssText = 'display:flex; gap:8px; margin-top:12px;';
 
     var saveBtn = doc.createElement('button');
-    saveBtn.textContent = 'Save';
+    saveBtn.textContent = 'Save (S)';
     saveBtn.id = '__dccpSave';
     saveBtn.style.cssText = 'flex:1; padding:8px; background:#28a745; color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:14px;';
     btnRow.appendChild(saveBtn);
-
-    var exitBtn = doc.createElement('button');
-    exitBtn.textContent = 'Exit';
-    exitBtn.id = '__dccpExit';
-    exitBtn.style.cssText = 'flex:1; padding:8px; background:#dc3545; color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:14px;';
-    btnRow.appendChild(exitBtn);
 
     var closeBtn = doc.createElement('button');
     closeBtn.textContent = 'Close (Esc)';
@@ -680,7 +684,7 @@
 
     var help = doc.createElement('div');
     help.style.cssText='margin-top:12px; font:12px/1.4 system-ui,Arial,sans-serif; color:#444;';
-    help.textContent='Hotkeys: Ctrl+Alt+O (panel), C (caret), P (pointer), D (debug), -/+(size), 9 (reset defaults).';
+    help.textContent='Hotkeys: Ctrl+Alt+O (panel), C (caret), P (pointer), S (save), D (debug), -/+(size), 9 (reset defaults).';
     panel.appendChild(help);
 
     // Live-save & live-broadcast on input (no need to press Save)
@@ -705,15 +709,7 @@
       savePrefs();
     });
 
-    function flashGreen(){
-      panel.style.transition = 'background 0.25s';
-      var old = panel.style.background;
-      panel.style.background = '#d4edda';
-      setTimeout(function(){ panel.style.background = old; }, 350);
-    }
-
-    saveBtn.addEventListener('click', function() { savePrefs(); flashGreen(); log('Preferences saved'); });
-    exitBtn.addEventListener('click', function() { savePrefs(); hideControlPanel(); });
+    saveBtn.addEventListener('click', function() { savePrefs(); flashPanelSaved(panel); log('Preferences saved'); });
     closeBtn.addEventListener('click', hideControlPanel);
 
     doc.addEventListener('keydown', function(e) {
@@ -775,6 +771,7 @@
       if(e.code==='KeyC'){ toggleCaret(); e.preventDefault(); return; }
       if(e.code==='KeyD'){ toggleDebug(); e.preventDefault(); return; }
       if(e.code==='KeyP'){ togglePointer(); e.preventDefault(); return; }
+      if(e.code==='KeyS'){ savePrefs(); flashPanelSaved(); console.log('[DocsCaret] Preferences saved (hotkey)'); e.preventDefault(); return; }
 
       if(e.code==='Minus' || e.code==='NumpadSubtract'){
         RED_POINTER_PIXEL_SIZE = Math.max(POINTER_MIN, RED_POINTER_PIXEL_SIZE - POINTER_STEP);

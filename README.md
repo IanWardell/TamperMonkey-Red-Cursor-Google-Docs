@@ -73,7 +73,8 @@ Use `Ctrl+Alt+` + key combinations:
 - `- / +` – decrease / increase pointer size
 - `9` – reset all colors and pointer size to a defaults preset
 - `O` – open/close the control panel (caret color, pointer color, pointer size)
-
+- `S` – save options panel settings without closing the panel
+- `Esc` – Escape/Close options panel
 ---
 
 ## Files
