@@ -223,10 +223,16 @@
   }
 
   function broadcastCurrentPrefs(){
+    // Get caret enabled state from first document
+    var docs = getAllDocs(document);
+    var caretEnabled = docs.length > 0 && docs[0].__overlayCaretEnabled;
+    
     tryPostBC({
       caretColor: CARET_COLOR,
       pointerColor: POINTER_COLOR,
-      pointerSize: RED_POINTER_PIXEL_SIZE
+      pointerSize: RED_POINTER_PIXEL_SIZE,
+      pointerEnabled: RED_POINTER_ENABLED,
+      caretEnabled: caretEnabled
     });
   }
 
@@ -270,6 +276,23 @@
         var size = clamp(parseInt(msg.pointerSize,10), POINTER_MIN, POINTER_MAX);
         if (!isNaN(size) && size !== RED_POINTER_PIXEL_SIZE) {
           RED_POINTER_PIXEL_SIZE = size; changed = true; applyRedPointerAllDocs();
+        }
+      }
+      if (typeof msg.pointerEnabled !== 'undefined' && msg.pointerEnabled !== RED_POINTER_ENABLED) {
+        RED_POINTER_ENABLED = msg.pointerEnabled; changed = true; applyRedPointerAllDocs();
+      }
+      if (typeof msg.caretEnabled !== 'undefined') {
+        var docs = getAllDocs(document);
+        var caretEnabled = msg.caretEnabled === true || msg.caretEnabled === 'true';
+        for (var i = 0; i < docs.length; i++) {
+          if (docs[i].__overlayCaretEnabled !== caretEnabled) {
+            docs[i].__overlayCaretEnabled = caretEnabled;
+            if (!caretEnabled && docs[i].__overlayCaret) {
+              docs[i].__overlayCaret.style.visibility = 'hidden';
+              docs[i].__overlayCaretVisible = false;
+            }
+            changed = true;
+          }
         }
       }
       if (changed) syncPanelUI();
