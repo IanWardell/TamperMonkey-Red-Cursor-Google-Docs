@@ -42,7 +42,9 @@
   var LS_KEYS = {
     caretColor:   'docsCaret.caretColor',
     pointerColor: 'docsCaret.pointerColor',
-    pointerSize:  'docsCaret.pointerSize'
+    pointerSize:  'docsCaret.pointerSize',
+    pointerEnabled: 'docsCaret.pointerEnabled',
+    caretEnabled: 'docsCaret.caretEnabled'
   };
 
   var Storage = makeLocalStorageAdapter();   // start with localStorage
@@ -179,6 +181,29 @@
       }
     }
 
+    // Load pointer enabled state
+    var pe = Storage.get(LS_KEYS.pointerEnabled);
+    if (pe !== undefined && pe !== null && pe !== '') {
+      var peBool = pe === 'true' || pe === true;
+      if (peBool !== RED_POINTER_ENABLED) {
+        RED_POINTER_ENABLED = peBool;
+        changed = true;
+      }
+    }
+
+    // Load caret enabled state (check first document)
+    var ce = Storage.get(LS_KEYS.caretEnabled);
+    if (ce !== undefined && ce !== null && ce !== '') {
+      var ceBool = ce === 'true' || ce === true;
+      var docs = getAllDocs(document);
+      for (var i = 0; i < docs.length; i++) {
+        if (docs[i].__overlayCaretEnabled !== ceBool) {
+          docs[i].__overlayCaretEnabled = ceBool;
+          changed = true;
+        }
+      }
+    }
+
     return changed;
   }
 
@@ -186,6 +211,13 @@
     Storage.set(LS_KEYS.caretColor,   CARET_COLOR);
     Storage.set(LS_KEYS.pointerColor, POINTER_COLOR);
     Storage.set(LS_KEYS.pointerSize,  String(RED_POINTER_PIXEL_SIZE));
+    Storage.set(LS_KEYS.pointerEnabled, String(RED_POINTER_ENABLED));
+    
+    // Save caret enabled state (use first document as reference)
+    var docs = getAllDocs(document);
+    var caretEnabled = docs.length > 0 && docs[0].__overlayCaretEnabled;
+    Storage.set(LS_KEYS.caretEnabled, String(caretEnabled));
+    
     // notify siblings immediately
     broadcastCurrentPrefs();
   }
@@ -795,7 +827,7 @@
   // =========================
   // ========= API ===========
   // =========================
-  function togglePointer(){ RED_POINTER_ENABLED=!RED_POINTER_ENABLED; applyRedPointerAllDocs(); console.log('[DocsCaret] Red Pointer ->', RED_POINTER_ENABLED); }
+  function togglePointer(){ RED_POINTER_ENABLED=!RED_POINTER_ENABLED; applyRedPointerAllDocs(); savePrefs(); console.log('[DocsCaret] Red Pointer ->', RED_POINTER_ENABLED); }
   function toggleDebug(){ DEBUG=!DEBUG; var d2=getAllDocs(document); for(var j=0;j<d2.length;j++) ensureDebugBadge(d2[j]); console.log('[DocsCaret] DEBUG ->', DEBUG); }
   function toggleCaret(){
     var docs=getAllDocs(document), state;
@@ -805,6 +837,7 @@
       if(!d.__overlayCaretEnabled && d.__overlayCaret){ d.__overlayCaret.style.visibility='hidden'; d.__overlayCaretVisible=false; }
       state=d.__overlayCaretEnabled; ensureDebugBadge(d);
     }
+    savePrefs();
     console.log('[DocsCaret] Caret overlay ->', state);
   }
   function resetDefaults(){
@@ -812,6 +845,12 @@
     POINTER_COLOR = '#ff0000';
     RED_POINTER_PIXEL_SIZE = 12;
     RED_POINTER_ENABLED = true;
+    
+    // Reset caret enabled state for all documents
+    var docs = getAllDocs(document);
+    for (var i = 0; i < docs.length; i++) {
+      docs[i].__overlayCaretEnabled = true;
+    }
 
     updateCaretColorAllDocs();
     applyRedPointerAllDocs();
