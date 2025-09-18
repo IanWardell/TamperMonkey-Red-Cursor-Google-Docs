@@ -57,10 +57,10 @@
 
   // Register tray menu once the core is live
   whenReady(function (api) {
-    try { GM_registerMenuCommand('Open Controls (Ctrl+Alt+O)',  api.openPanel); } catch (_) {}
-    try { GM_registerMenuCommand('Toggle Caret Overlay',        api.toggleCaret); } catch (_) {}
-    try { GM_registerMenuCommand('Toggle Red Pointer',          api.togglePointer, 'm'); } catch (_) {}
+    try { GM_registerMenuCommand('Open Controls (Ctrl+Alt+O)',     api.openPanel); } catch (_) {}
+    try { GM_registerMenuCommand('Toggle Caret Overlay (Ctrl+Alt+C)', api.toggleCaret, 'c'); } catch (_) {}
+    try { GM_registerMenuCommand('Toggle Red Pointer (Ctrl+Alt+P)',  api.togglePointer, 'p'); } catch (_) {}
     try { GM_registerMenuCommand('Reset to Defaults (Ctrl+Alt+9)', api.resetDefaults); } catch (_) {}
-    try { GM_registerMenuCommand('Toggle Debug Badge',          api.toggleDebug); } catch (_) {}
+    try { GM_registerMenuCommand('Toggle Console Debug',          api.toggleDebug); } catch (_) {}
   });
 })();
