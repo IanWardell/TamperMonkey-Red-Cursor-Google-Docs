@@ -77,6 +77,11 @@ Use `Ctrl+Alt+` + key combinations:
 - `Esc` – Escape/Close options panel
 ---
 
+| Screenshot Options Menu | Screenshot Controls |
+|------------|-----------|
+| <img src="Screenshot-Options-Menu.png" alt="Screenshot Options Menu Example" width="400"> | <img src="Screenshot-Controls.png" alt="Screenshot Controls Example" width="400"> |
+
+---
 ## Files
 - `docs-caret-vis-control.user.js` — minimal userscript stub with metadata and `@require` to load the implementation (**actively maintained**)
 - `pointer-caret-color-vis-control.js` — modular userscript implementation (used by the stub, actively maintained)
