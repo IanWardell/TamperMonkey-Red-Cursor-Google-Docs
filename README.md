@@ -83,7 +83,7 @@ Use `Ctrl+Alt+` + key combinations:
 
 ---
 ## Files
-- `docs-caret-vis-control.user.js` — minimal userscript stub with metadata and `@require` to load the implementation (**actively maintained**)
+- `TamperMonkey-Installer-docs-caret-vis-control.user.js` — minimal userscript stub with metadata and `@require` to load the implementation (**actively maintained**)
 - `pointer-caret-color-vis-control.js` — modular userscript implementation (used by the stub, actively maintained)
 - `tampermonkey-cursor-control.js` — legacy standalone script (**not updated long term**)
 - `README.md`, `LICENSE`
